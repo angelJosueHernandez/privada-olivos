@@ -67,7 +67,12 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
 
   const setPaso = (p: PasoRegistro) => {
     setPasoLocal(p); onPaso?.(p); setError('')
-    requestAnimationFrame(() => inicio.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+    // Sube al inicio moviendo solo el contenedor de la hoja: scrollIntoView en iOS también desplaza
+    // la página de fondo y deja la hoja trabada sin poder hacer scroll
+    requestAnimationFrame(() => {
+      const contenedor = inicio.current?.closest<HTMLElement>('[data-hoja-scroll]')
+      if (contenedor) contenedor.scrollTop = 0
+    })
   }
   const cambiarTipo = (t: NuevoAcceso['tipo']) => {
     setTipo(t); setEmpresa(null); setEtiquetas([]); setError('')

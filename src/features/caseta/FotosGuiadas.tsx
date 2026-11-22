@@ -7,19 +7,20 @@ import { NuevoAcceso } from './tipos'
 export type FotoEvidencia = { blob: Blob; url: string; slot: string }
 export type Guia = { id: string; titulo: string; ayuda: string; icono: IconName; obligatoria: boolean }
 
-/* Qué debe fotografiar el guardia en cada tipo de registro (nunca rostros ni identificaciones completas) */
+/* Qué debe fotografiar el guardia en cada tipo de registro (nunca rostros ni identificaciones completas).
+   Todas son opcionales: la única foto obligatoria es la de la placa, cuando llega en vehículo. */
 export const GUIAS: Record<NuevoAcceso['tipo'], Guia[]> = {
   PAQUETERIA: [
-    { id: 'paquete', titulo: 'Paquetes', ayuda: 'Que se vean todos los paquetes que entran.', icono: 'paquete', obligatoria: true },
-    { id: 'guia', titulo: 'Guía o etiqueta', ayuda: 'De cerca, que se lea el número de guía.', icono: 'lista', obligatoria: true },
+    { id: 'paquete', titulo: 'Paquetes', ayuda: 'Que se vean todos los paquetes que entran.', icono: 'paquete', obligatoria: false },
+    { id: 'guia', titulo: 'Guía o etiqueta', ayuda: 'De cerca, que se lea el número de guía.', icono: 'lista', obligatoria: false },
     { id: 'gafete', titulo: 'Gafete del repartidor', ayuda: 'Solo el gafete o el uniforme con el logo, sin el rostro.', icono: 'usuario', obligatoria: false },
   ],
   COMIDA: [
-    { id: 'pedido', titulo: 'Pedido o bolsa', ayuda: 'Con el sello o el nombre del cliente visible.', icono: 'comida', obligatoria: true },
+    { id: 'pedido', titulo: 'Pedido o bolsa', ayuda: 'Con el sello o el nombre del cliente visible.', icono: 'comida', obligatoria: false },
     { id: 'app', titulo: 'Gafete o pedido en la app', ayuda: 'La pantalla del pedido del repartidor o su gafete.', icono: 'usuario', obligatoria: false },
   ],
   SERVICIO: [
-    { id: 'credencial', titulo: 'Credencial de la empresa', ayuda: 'El gafete o credencial con el nombre de la empresa.', icono: 'usuario', obligatoria: true },
+    { id: 'credencial', titulo: 'Credencial de la empresa', ayuda: 'El gafete o credencial con el nombre de la empresa.', icono: 'usuario', obligatoria: false },
     { id: 'orden', titulo: 'Orden de servicio', ayuda: 'Folio o documento del trabajo, si lo trae.', icono: 'lista', obligatoria: false },
     { id: 'material', titulo: 'Herramienta o material', ayuda: 'Lo que trae al entrar, para revisarlo a la salida.', icono: 'herramienta', obligatoria: false },
   ],

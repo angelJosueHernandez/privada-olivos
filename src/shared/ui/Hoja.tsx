@@ -44,7 +44,7 @@ export default function Hoja({ titulo, onCerrar, oscura = false, children, pie }
           <h2 id={id} ref={tituloRef} tabIndex={-1} className="text-[1.0625rem] font-semibold tracking-[-0.01em] outline-none">{titulo}</h2>
         </div>
       </header>
-      <div className="flex-1 overflow-y-auto overscroll-contain">
+      <div data-hoja-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         <div className="mx-auto w-full max-w-3xl px-5 py-6">{children}</div>
       </div>
       {pie && (
