@@ -119,3 +119,53 @@ export const COLORES: { valor: Color; etiqueta: string; muestra: string }[] = [
   { valor: 'CAFE', etiqueta: 'Café', muestra: '#8A5A33' },
   { valor: 'OTRO', etiqueta: 'Otro', muestra: 'conic-gradient(#D70015,#F2C200,#248A3D,#0A60C2,#D70015)' },
 ]
+
+// ---------- Residente: pases y avisos ----------
+
+/** Pase tal como lo ve el residente que lo creó (incluye el código del QR y su estado) */
+export type PaseResidente = Pase & {
+  /** Contenido del QR. No lleva datos personales: el servidor busca el pase con este código */
+  codigo: string
+  estado: Exclude<EstadoPase, 'NO_EXISTE'>
+  desde?: Date
+  hasta?: Date
+  usadoEn?: Date
+  /** Explicación del estado (p. ej. "Era válido ayer de 10:00 a 14:00") */
+  detalle?: string
+}
+
+export type DiaPase = 'HOY' | 'MANANA'
+export type HorarioPase = 'DIA' | 'MANANA' | 'TARDE' | 'NOCHE'
+
+export const HORARIOS: { valor: HorarioPase; etiqueta: string; desde: number; hasta: number }[] = [
+  { valor: 'DIA', etiqueta: 'Todo el día', desde: 7, hasta: 22 },
+  { valor: 'MANANA', etiqueta: 'Mañana', desde: 8, hasta: 14 },
+  { valor: 'TARDE', etiqueta: 'Tarde', desde: 14, hasta: 20 },
+  { valor: 'NOCHE', etiqueta: 'Noche', desde: 18, hasta: 23 },
+]
+export const MOTIVOS = ['Familiar', 'Amistad', 'Servicio', 'Trabajo doméstico', 'Entrega', 'Reunión'] as const
+
+export type NuevoPase = {
+  visitante: string
+  motivo?: string
+  dia: DiaPase
+  horario: HorarioPase
+  personas: number
+  placas?: string
+}
+
+/**
+ * Aviso para una casa (o para la caseta): "tu visita llegó", "tu paquete va en camino"…
+ * Con la API los genera el servidor al registrar el evento y los manda como notificación push.
+ */
+export type TipoAviso = 'llegada' | 'camino' | 'paquete' | 'entrega' | 'salida' | 'pase'
+export type Aviso = {
+  id: string
+  /** Casa destinataria, o 'CASETA' para avisos a los guardias */
+  para: string
+  tipo: TipoAviso
+  titulo: string
+  cuerpo: string
+  en: Date
+  accesoId?: string
+}

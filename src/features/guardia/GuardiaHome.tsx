@@ -3,7 +3,6 @@ import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Icon, { IconName } from '../../shared/ui/Icon'
-import { hayApi } from '../../shared/api/cliente'
 import { useAuth } from '../auth/AuthContext'
 import DetalleAcceso from '../caseta/DetalleAcceso'
 import Escaner from '../caseta/Escaner'
@@ -12,6 +11,8 @@ import { BotonCampana, PanelNotificaciones, useNotificaciones } from '../caseta/
 import RegistroManual, { PasoRegistro } from '../caseta/RegistroManual'
 import ResultadoPase, { verificacionesDe } from '../caseta/ResultadoPase'
 import { casetaService } from '../caseta/casetaService'
+import { useAvisos } from '../caseta/useAvisos'
+import TarjetaAvisos from '../../shared/avisos/TarjetaAvisos'
 import { Acceso, Actor, ETIQUETA_TIPO, NuevoAcceso, TipoAcceso, Validacion } from '../caseta/tipos'
 
 type Vista =
@@ -58,7 +59,10 @@ export default function GuardiaHome() {
     catch { notificar('error', 'No se pudo cargar la bitácora', 'Revisa la conexión.') }
     finally { setCargandoLista(false) }
   }, [notificar])
-  useEffect(() => { recargar() }, [recargar])
+  // Se actualiza sola cuando hay cambios (otro guardia, un pase nuevo de un residente…)
+  useEffect(() => { recargar(); return casetaService.suscribir(() => void recargar()) }, [recargar])
+  // Pases que crean o cancelan los residentes: aviso en la campana y notificación del sistema
+  useAvisos('CASETA', '/guardia', (v) => notificar('pase', v.titulo, v.cuerpo))
   useEffect(() => { const t = setInterval(() => setAhora(new Date()), 30_000); return () => clearInterval(t) }, [])
 
   // Automatización: avisa una sola vez por registro cuando pasa del tiempo límite dentro
@@ -113,8 +117,7 @@ export default function GuardiaHome() {
         `${a.nombre} → ${a.casa}${fotos.length ? ` · ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}`)
       // Automatización: si el paquete se queda en caseta, se avisa a la casa
       if (a.paquete === 'CASETA') {
-        setTimeout(() => notificar('paquete', `Aviso enviado a ${a.casa}`,
-          hayApi ? 'Su paquete está en caseta.' : 'Su paquete está en caseta. (En modo demostración no se envía realmente).'), 900)
+        setTimeout(() => notificar('paquete', `Aviso enviado a ${a.casa}`, 'Le avisamos que su paquete está en caseta.'), 900)
       }
       setFiltro(a.paquete === 'CASETA' ? 'caseta' : 'dentro'); marcarNuevo(a.id); recargar()
       confirmar(a.paquete === 'CASETA' ? 'Paquete en caseta' : 'Entrada registrada', `${a.nombre} → ${a.casa}`, a.nombre)
@@ -153,6 +156,10 @@ export default function GuardiaHome() {
       <Encabezado titulo="Caseta principal"
         detalle={ahora.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + horaCorta(ahora)}
         accion={<BotonCampana sinLeer={sinLeer} onAbrir={() => { setVista({ modo: 'notificaciones' }); marcarLeidas() }} />} />
+
+      <div className="mb-4">
+        <TarjetaAvisos texto="Te avisamos cuando alguien lleve demasiado tiempo dentro o un residente cree o cancele un pase." />
+      </div>
 
       {/* Acciones principales: grandes para usarse rápido, con guantes o a pleno sol */}
       <div className="grid gap-3 sm:grid-cols-2">

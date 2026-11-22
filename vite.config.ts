@@ -11,16 +11,23 @@ export default defineConfig(({ mode }) => ({
         // Las respuestas de la API (datos de residentes, pagos, sesión) nunca se guardan en caché
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [],
+        // Avisos: push del servidor y abrir la app al tocar una notificación
+        importScripts: ['sw-avisos.js'],
       },
       manifest: {
         name: 'Mi Privada',
         short_name: 'Privada',
         lang: 'es',
         display: 'standalone',
-        theme_color: '#F5F5F7',
+        start_url: '/',
+        scope: '/',
+        theme_color: '#FFFFFF',
         background_color: '#F5F5F7',
-        // TODO: agregar iconos 192x192 y 512x512 en /public para poder instalarla
-        icons: [],
+        icons: [
+          { src: '/icono-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icono-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icono-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
     }),
   ],
