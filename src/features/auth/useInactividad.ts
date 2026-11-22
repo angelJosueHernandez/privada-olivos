@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { authService } from './authService'
 
 /*
   Cierra la sesión tras N minutos sin actividad (toque, tecla, scroll), con aviso 1 minuto antes.
@@ -32,7 +33,7 @@ export function useInactividad(minutos: number, alExpirar: () => void, activo: b
       }, limite)
     }
     // Evita reprogramar en cada evento: como máximo una vez cada 5 s
-    const actividad = () => { const t = Date.now(); if (t - ultimo > 5_000) { ultimo = t; programar() } }
+    const actividad = () => { const t = Date.now(); if (t - ultimo > 5_000) { ultimo = t; programar(); authService.marcarActividad() } }
     const alVolver = () => {
       if (document.visibilityState !== 'visible') return
       if (Date.now() - ultimo > limite) { toast.info('Sesión cerrada por inactividad'); expirar.current() } else actividad()

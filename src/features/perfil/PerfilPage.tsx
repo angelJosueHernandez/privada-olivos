@@ -40,7 +40,7 @@ export default function PerfilPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <button onClick={() => navegar(rutaInicio(user.rol))} className="mb-6 -ml-2 inline-flex items-center gap-1 min-h-11 px-2 rounded-full text-[0.9375rem] font-medium text-acento hover:bg-acento/[0.06]">
+      <button onClick={() => (window.history.state?.idx > 0 ? navegar(-1) : navegar(rutaInicio(user.rol), { replace: true }))} className="mb-6 -ml-2 inline-flex items-center gap-1 min-h-11 px-2 rounded-full text-[0.9375rem] font-medium text-acento hover:bg-acento/[0.06]">
         <Icon n="atras" size={20} />Volver
       </button>
 

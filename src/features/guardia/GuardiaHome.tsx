@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
+import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { hayApi } from '../../shared/api/cliente'
 import { useAuth } from '../auth/AuthContext'
@@ -70,6 +71,8 @@ export default function GuardiaHome() {
   }, [accesos, ahora, notificar])
 
   const cerrar = () => setVista(null)
+  // "Atrás" en el celular cierra la ventana abierta en lugar de salir de la pantalla
+  useAtrasCierra(vista !== null, cerrar)
   const marcarNuevo = (id: string) => { setNuevoId(id); setTimeout(() => setNuevoId((x) => (x === id ? null : x)), 2200) }
   // Confirmación animada que se cierra sola
   const confirmar = (titulo: string, detalle: string, logo?: string) => {

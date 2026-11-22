@@ -1,4 +1,5 @@
 import { api, ErrorApi, hayApi } from '../../shared/api/cliente'
+import { INACTIVIDAD_MIN } from './permisos'
 
 export type Rol = 'ADMIN' | 'RESIDENTE' | 'GUARDIA'
 export type Usuario = { id: string; nombre: string; rol: Rol; casa?: string; email?: string }
@@ -38,6 +39,9 @@ function validarUsuario(u: unknown): Usuario {
     email: typeof x.email === 'string' ? x.email.slice(0, 254) : undefined,
   }
 }
+
+const CLAVE_SESION = 'olv-sesion'
+function borrarSesionDemo() { try { sessionStorage.removeItem(CLAVE_SESION) } catch { /* nada */ } }
 
 export const LIMITES = { email: 254, password: 128 } as const
 const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -79,7 +83,45 @@ export const authService = {
     }
   },
 
+  /**
+   * Recupera la sesión al recargar la página o al volver con "atrás" (el navegador a veces recarga).
+   * - Con API: la cookie HttpOnly la valida el servidor (GET /api/auth/sesion).
+   * - Demo: sessionStorage guarda solo el ID (nunca contraseñas ni tokens) y el usuario se toma de la
+   *   lista interna, así que editar el almacenamiento no inventa roles. Se borra al cerrar la pestaña
+   *   y caduca con el mismo tiempo de inactividad del rol.
+   */
+  async restaurar(): Promise<{ usuario: Usuario; inicio: Date } | null> {
+    if (!MODO_DEMO) {
+      try {
+        const r = await api<{ usuario: unknown; inicio?: string }>('/api/auth/sesion')
+        const inicio = r.inicio ? new Date(r.inicio) : new Date()
+        return { usuario: validarUsuario(r.usuario), inicio: isNaN(inicio.getTime()) ? new Date() : inicio }
+      } catch { return null }
+    }
+    try {
+      const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? 'null') as { id?: unknown; inicio?: unknown; ultima?: unknown } | null
+      if (!s || typeof s.id !== 'string' || typeof s.inicio !== 'number' || typeof s.ultima !== 'number') return null
+      const usuario = Object.values(DEMO).find((u) => u.id === s.id)
+      if (!usuario || Date.now() - s.ultima > INACTIVIDAD_MIN[usuario.rol] * 60_000) { borrarSesionDemo(); return null }
+      return { usuario, inicio: new Date(s.inicio) }
+    } catch { return null }
+  },
+  /** Demo: recuerda la sesión en esta pestaña (solo ID y horas) */
+  recordar(usuario: Usuario, inicio: Date) {
+    if (!MODO_DEMO) return
+    try { sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ id: usuario.id, inicio: inicio.getTime(), ultima: Date.now() })) } catch { /* sin almacenamiento: solo en memoria */ }
+  },
+  /** Demo: anota la última actividad para que la sesión recuperada respete la inactividad */
+  marcarActividad() {
+    if (!MODO_DEMO) return
+    try {
+      const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? 'null')
+      if (s) sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ ...s, ultima: Date.now() }))
+    } catch { /* nada */ }
+  },
+
   async logout(): Promise<void> {
+    borrarSesionDemo()
     if (MODO_DEMO) return
     try { await api('/api/auth/logout', { metodo: 'POST' }) } catch { /* la sesión local se cierra igual */ }
   },

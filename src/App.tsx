@@ -14,7 +14,9 @@ import AvisoCookies from './features/legal/AvisoCookies'
 import PerfilPage from './features/perfil/PerfilPage'
 
 export default function App() {
-  const { user } = useAuth()
+  const { user, listo } = useAuth()
+  // Mientras se revisa si hay sesión que recuperar no se redirige a nadie al login
+  if (!listo) return <div className="min-h-dvh bg-fondo" aria-busy="true" />
   return (
     <>
       <Routes>
