@@ -10,10 +10,11 @@ import { puedeVer, rutaInicio } from './permisos'
   Si alguien escribe o pega la dirección de otra sección, vuelve a su inicio con un aviso.
   La seguridad real la aplica la API en cada petición; esto controla la navegación.
 */
-export default function RequireRole({ rol, children }: { rol: Rol; children: ReactNode }) {
+/** Sin `rol`: cualquier sesión válida cuya lista blanca incluya la ruta (p. ej. /perfil) */
+export default function RequireRole({ rol, children }: { rol?: Rol; children: ReactNode }) {
   const { user } = useAuth()
   const { pathname } = useLocation()
-  const permitido = !!user && user.rol === rol && puedeVer(user.rol, pathname)
+  const permitido = !!user && (!rol || user.rol === rol) && puedeVer(user.rol, pathname)
 
   useEffect(() => {
     if (user && !permitido) toast.error('No tienes acceso a esa sección', { id: 'sin-acceso' })

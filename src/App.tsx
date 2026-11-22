@@ -11,6 +11,7 @@ import PrivacidadPage from './features/legal/PrivacidadPage'
 import TerminosPage from './features/legal/TerminosPage'
 import CookiesPage from './features/legal/CookiesPage'
 import AvisoCookies from './features/legal/AvisoCookies'
+import PerfilPage from './features/perfil/PerfilPage'
 
 export default function App() {
   const { user } = useAuth()
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/residente" element={<RequireRole rol="RESIDENTE"><ResidenteHome /></RequireRole>} />
           <Route path="/guardia" element={<RequireRole rol="GUARDIA"><GuardiaHome /></RequireRole>} />
           <Route path="/admin" element={<RequireRole rol="ADMIN"><AdminHome /></RequireRole>} />
+          <Route path="/perfil" element={<RequireRole><PerfilPage /></RequireRole>} />
         </Route>
         <Route path="*" element={<Navigate to={user ? rutaInicio(user.rol) : '/login'} replace />} />
       </Routes>

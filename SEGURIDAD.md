@@ -56,6 +56,12 @@ esta página. La seguridad real vive en el servidor.
 - No aceptar campos de más (mass assignment): DTOs con solo los campos permitidos, nunca enlazar el modelo de la base de datos.
 - Responder 404 en vez de 403 cuando el recurso no es del usuario.
 
+### 5b. Trazabilidad (bitácora de auditoría)
+- Cada pase guarda **quién lo creó** (residente) y cuándo; cada acceso guarda **qué guardia** registró la entrada, la salida y la entrega del paquete, con hora.
+- El **actor y la hora los pone el servidor** a partir de la sesión y de su propio reloj. Nunca se aceptan del navegador (el frontend manda el actor solo en modo demo).
+- La bitácora es de **solo agregar**: sin UPDATE ni DELETE desde la app. Las correcciones se registran como un evento nuevo, con quién y por qué.
+- Cada registro lleva un **folio** único y legible para rastrearlo, y el ID interno es un UUID.
+
 ### 6. Pases QR
 - El QR solo lleva un identificador aleatorio y firmado (o un token opaco), nunca datos personales.
 - Expiración, uso único (o ventana horaria) y validación siempre en el servidor al escanear.

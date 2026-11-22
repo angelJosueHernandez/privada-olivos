@@ -4,11 +4,26 @@ import Icon from '../../shared/ui/Icon'
 
 type EstadoCamara = 'iniciando' | 'activa' | 'sin-permiso' | 'sin-camara' | 'error'
 
+// Lector nativo de códigos (Chrome/Android, Safari reciente). Tipos mínimos porque TypeScript no los incluye.
+type Detector = { detect: (fuente: CanvasImageSource) => Promise<{ rawValue: string }[]> }
+type ClaseDetector = { new (o: { formats: string[] }): Detector; getSupportedFormats?: () => Promise<string[]> }
+
+async function crearDetectorNativo(): Promise<Detector | null> {
+  const Clase = (window as unknown as { BarcodeDetector?: ClaseDetector }).BarcodeDetector
+  if (!Clase) return null
+  try {
+    const formatos = (await Clase.getSupportedFormats?.()) ?? ['qr_code']
+    return formatos.includes('qr_code') ? new Clase({ formats: ['qr_code'] }) : null
+  } catch { return null }
+}
+
 /*
-  Lector de QR con la cámara trasera.
-  Lee varias veces por segundo sobre un canvas reducido (rápido incluso en celulares modestos) y
-  funciona en todos los navegadores modernos, incluido Safari de iPhone, porque no depende del
-  BarcodeDetector nativo. Si no hay cámara o no hay permiso, queda la opción de escribir el código.
+  Lector de QR con la cámara trasera, optimizado para leer rápido:
+  - Usa el lector nativo del sistema cuando existe (más rápido y tolerante a reflejos de pantalla).
+  - Si no, usa jsQR solo sobre el ÁREA DEL MARCO, a buena resolución: así el código ocupa más
+    píxeles, se ignoran otros códigos alrededor y cada lectura es más rápida.
+  - Lee ~10 veces por segundo con requestAnimationFrame, enfoque continuo y cámara Full HD.
+  Si no hay cámara o permiso, queda la opción de escribir el código.
 */
 export default function Escaner({ onLeido }: { onLeido: (contenido: string) => void }) {
   const video = useRef<HTMLVideoElement>(null)
@@ -23,36 +38,61 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
   useEffect(() => {
     let flujo: MediaStream | null = null
     let activo = true
-    let temporizador = 0
+    let cuadro = 0
+    let ultimo = 0
+    let ocupado = false
+    let intentos = 0
+    let detector: Detector | null = null
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!
 
-    const leer = () => {
+    const exito = (texto: string) => {
+      activo = false
+      navigator.vibrate?.(60) // confirmación táctil en el mismo instante de la lectura
+      setLeidoOk(true) // el marco se pone verde y aparece la palomita
+      window.setTimeout(() => leido.current(texto), 380)
+    }
+
+    // Recorta el centro (el área del marco) y lo escala a un tamaño cómodo para decodificar
+    const leerConJsQR = (v: HTMLVideoElement, completo: boolean) => {
+      const lado = completo ? Math.min(v.videoWidth, v.videoHeight) : Math.min(v.videoWidth, v.videoHeight) * 0.75
+      const sx = (v.videoWidth - lado) / 2
+      const sy = (v.videoHeight - lado) / 2
+      const destino = Math.min(720, Math.round(lado))
+      canvas.width = destino
+      canvas.height = destino
+      ctx.drawImage(v, sx, sy, lado, lado, 0, 0, destino, destino)
+      const datos = ctx.getImageData(0, 0, destino, destino)
+      // Cada cierto número de cuadros también prueba colores invertidos (códigos claros sobre fondo oscuro)
+      return jsQR(datos.data, destino, destino, { inversionAttempts: intentos % 6 === 5 ? 'onlyInvert' : 'dontInvert' })?.data
+    }
+
+    const ciclo = async (t: number) => {
+      if (!activo) return
+      cuadro = requestAnimationFrame(ciclo)
       const v = video.current
-      if (!activo || !v) return
-      if (v.readyState >= 2 && v.videoWidth) {
-        const escala = Math.min(1, 640 / v.videoWidth)
-        canvas.width = Math.round(v.videoWidth * escala)
-        canvas.height = Math.round(v.videoHeight * escala)
-        ctx.drawImage(v, 0, 0, canvas.width, canvas.height)
-        const datos = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const qr = jsQR(datos.data, datos.width, datos.height, { inversionAttempts: 'dontInvert' })
-        if (qr?.data) {
-          activo = false
-          navigator.vibrate?.(60) // confirmación táctil en el mismo instante de la lectura
-          setLeidoOk(true) // el marco se pone verde y aparece la palomita
-          window.setTimeout(() => leido.current(qr.data), 450)
-          return
+      if (ocupado || !v || v.readyState < 2 || !v.videoWidth || t - ultimo < 90) return
+      ultimo = t
+      ocupado = true
+      intentos++
+      try {
+        let texto: string | undefined
+        if (detector) {
+          const codigos = await detector.detect(v)
+          texto = codigos[0]?.rawValue
+        } else {
+          texto = leerConJsQR(v, intentos % 4 === 0) // 1 de cada 4 cuadros revisa la imagen completa
         }
-      }
-      temporizador = window.setTimeout(leer, 140)
+        if (texto && activo) exito(texto)
+      } catch { /* cuadro ilegible: se intenta con el siguiente */ }
+      finally { ocupado = false }
     }
 
     ;(async () => {
       if (!navigator.mediaDevices?.getUserMedia) { setEstado('sin-camara'); return }
       try {
         flujo = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         })
         if (!activo) { flujo.getTracks().forEach((t) => t.stop()); return }
@@ -60,10 +100,15 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
         v.srcObject = flujo
         await v.play()
         pista.current = flujo.getVideoTracks()[0] ?? null
-        const capacidades = pista.current?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean }) | undefined
+        const capacidades = pista.current?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] }) | undefined
         if (capacidades?.torch) setLinterna(false)
+        // Enfoque continuo: evita que la cámara se quede desenfocada al acercar el código
+        if (capacidades?.focusMode?.includes('continuous')) {
+          pista.current?.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => {})
+        }
+        detector = await crearDetectorNativo()
         setEstado('activa')
-        leer()
+        cuadro = requestAnimationFrame(ciclo)
       } catch (e) {
         const nombre = (e as DOMException)?.name
         setEstado(nombre === 'NotAllowedError' || nombre === 'SecurityError' ? 'sin-permiso'
@@ -73,7 +118,7 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
 
     return () => {
       activo = false
-      clearTimeout(temporizador)
+      cancelAnimationFrame(cuadro)
       flujo?.getTracks().forEach((t) => t.stop())
       pista.current = null
     }
@@ -107,7 +152,7 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
 
         {/* Marco de lectura: oscurece alrededor y marca las esquinas */}
         {estado === 'activa' && (
-          <div aria-hidden="true" className="absolute inset-[14%] rounded-[22px] shadow-[0_0_0_9999px_rgb(0_0_0/0.45)]">
+          <div aria-hidden="true" className="absolute inset-[12.5%] rounded-[22px] shadow-[0_0_0_9999px_rgb(0_0_0/0.45)]">
             {['left-0 top-0 border-l-4 border-t-4 rounded-tl-[22px]', 'right-0 top-0 border-r-4 border-t-4 rounded-tr-[22px]',
               'left-0 bottom-0 border-l-4 border-b-4 rounded-bl-[22px]', 'right-0 bottom-0 border-r-4 border-b-4 rounded-br-[22px]']
               .map((c) => <span key={c} className={`absolute h-10 w-10 transition-[border-color,transform] duration-200 ease-out ${leidoOk ? 'border-[rgb(var(--ok))] scale-[0.92]' : 'border-white'} ${c}`} />)}

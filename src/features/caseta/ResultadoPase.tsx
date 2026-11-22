@@ -76,6 +76,14 @@ export default function ResultadoPase({ validacion, verificado, onVerificar }: {
               <Dato icono="visita" etiqueta="Personas" valor={String(p.personas)} />
               <Dato icono="auto" etiqueta="Placas" valor={p.placas ?? 'Sin vehículo'} />
             </div>
+            {/* Trazabilidad: quién creó el pase y cuándo */}
+            <div className="mt-3 flex items-center gap-3 rounded-[16px] bg-fondo px-4 py-3">
+              <span className="grid place-items-center h-9 w-9 shrink-0 rounded-full bg-panel text-texto/70"><Icon n="usuario" size={18} /></span>
+              <p className="min-w-0 text-[0.875rem] leading-snug">
+                Pase <strong className="font-semibold cifras">{p.folio}</strong> creado por <strong className="font-semibold">{p.creadoPor.nombre}</strong>
+                <span className="block text-suave">{p.creadoPor.casa ?? 'Residente'} · {p.creadoEn.toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+              </p>
+            </div>
           </section>
 
           {/* Verificación antes de dejar pasar */}

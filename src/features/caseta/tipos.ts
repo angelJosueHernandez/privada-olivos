@@ -4,6 +4,11 @@ export type TipoAcceso = 'VISITA_QR' | 'PAQUETERIA' | 'COMIDA' | 'SERVICIO' | 'V
 export type Vehiculo = 'A_PIE' | 'BICICLETA' | 'MOTO' | 'AUTO' | 'CAMIONETA' | 'CAMION'
 export type Color = 'BLANCO' | 'NEGRO' | 'GRIS' | 'PLATA' | 'ROJO' | 'AZUL' | 'VERDE' | 'AMARILLO' | 'CAFE' | 'OTRO'
 
+/** Quién hizo una acción. En producción lo asigna la API con la sesión, nunca el navegador. */
+export type Actor = { id: string; nombre: string; rol: 'ADMIN' | 'RESIDENTE' | 'GUARDIA'; casa?: string }
+
+export const ETIQUETA_ROL: Record<Actor['rol'], string> = { ADMIN: 'Administración', RESIDENTE: 'Residente', GUARDIA: 'Guardia' }
+
 export type Pase = {
   id: string
   visitante: string
@@ -15,6 +20,11 @@ export type Pase = {
   vigencia: string
   personas: number
   placas?: string
+  /** Folio del pase para rastrearlo */
+  folio: string
+  /** Residente que creó el pase y cuándo */
+  creadoPor: Actor
+  creadoEn: Date
 }
 
 export type EstadoPase = 'VALIDO' | 'VENCIDO' | 'USADO' | 'REVOCADO' | 'FUERA_DE_HORARIO' | 'NO_EXISTE'
@@ -41,9 +51,18 @@ export type Acceso = {
   /** Para paquetes en caseta: cuándo se entregó al residente */
   entregado?: Date
   paseId?: string
+  /** Folio del registro para rastrearlo */
+  folio: string
+  /** Trazabilidad: quién hizo cada paso (lo asigna la API con la sesión) */
+  registradoPor: Actor
+  salidaPor?: Actor
+  entregadoPor?: Actor
+  paseFolio?: string
+  paseCreadoPor?: Actor
+  paseCreadoEn?: Date
 }
 
-export type NuevoAcceso = Omit<Acceso, 'id' | 'fotos' | 'entrada' | 'salida' | 'entregado' | 'paseId'> & {
+export type NuevoAcceso = Omit<Acceso, 'id' | 'fotos' | 'entrada' | 'salida' | 'entregado' | 'paseId' | 'folio' | 'registradoPor' | 'salidaPor' | 'entregadoPor' | 'paseFolio' | 'paseCreadoPor' | 'paseCreadoEn'> & {
   tipo: Exclude<TipoAcceso, 'VISITA_QR'>
 }
 

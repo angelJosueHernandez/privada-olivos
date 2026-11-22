@@ -9,9 +9,10 @@ import type { Rol } from './authService'
   navegador es confiable por sí solo.
 */
 export const PERMISOS: Record<Rol, readonly string[]> = Object.freeze({
-  ADMIN: Object.freeze(['/admin']),
-  RESIDENTE: Object.freeze(['/residente']),
-  GUARDIA: Object.freeze(['/guardia']),
+  // La primera ruta es el inicio del rol; /perfil es común a todos (solo muestra el perfil propio)
+  ADMIN: Object.freeze(['/admin', '/perfil']),
+  RESIDENTE: Object.freeze(['/residente', '/perfil']),
+  GUARDIA: Object.freeze(['/guardia', '/perfil']),
 })
 
 /** Minutos sin actividad antes de cerrar la sesión automáticamente */

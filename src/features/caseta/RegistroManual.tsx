@@ -2,14 +2,16 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { Opciones, OpcionesMultiples } from '../../shared/ui/Opciones'
+import FotosGuiadas, { ApartadoFoto, FotoEvidencia, GUIAS } from './FotosGuiadas'
 import LectorPlaca from './LectorPlaca'
 import LogoEmpresa from './LogoEmpresa'
 import SelectorCasa from './SelectorCasa'
 import { casetaService } from './casetaService'
-import FotosGuiadas, { FotoEvidencia } from './FotosGuiadas'
 import {
-  Acceso, Color, COLORES, EMPRESAS, ETIQUETAS, LecturaPlaca, NuevoAcceso, tienePlaca, Vehiculo, VEHICULOS,
+  Acceso, Color, COLORES, EMPRESAS, ETIQUETA_TIPO, ETIQUETAS, LecturaPlaca, NuevoAcceso, tienePlaca, Vehiculo, VEHICULOS,
 } from './tipos'
+
+export type PasoRegistro = 'fotos' | 'datos'
 
 const TIPOS: { valor: NuevoAcceso['tipo']; etiqueta: string; icono: IconName }[] = [
   { valor: 'PAQUETERIA', etiqueta: 'Paquetería', icono: 'paquete' },
@@ -22,12 +24,11 @@ const VEHICULO_POR_IA: Record<LecturaPlaca['tipoVehiculo'], Vehiculo | undefined
 }
 const OTRA = 'Otra'
 
-
-function Paso({ n, titulo, extra, children }: { n: number; titulo: string; extra?: ReactNode; children: ReactNode }) {
+function Seccion({ titulo, extra, children, retraso = 0 }: { titulo: string; extra?: ReactNode; children: ReactNode; retraso?: number }) {
   return (
-    <section aria-labelledby={`paso-${n}`} className="anim-entrar" style={{ animationDelay: `${Math.min(n * 40, 200)}ms` }}>
+    <section className="anim-entrar" style={{ animationDelay: `${retraso}ms` }}>
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 id={`paso-${n}`} className="text-[1.0625rem] font-semibold tracking-[-0.01em]">{titulo}</h3>
+        <h3 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">{titulo}</h3>
         {extra}
       </div>
       {children}
@@ -35,10 +36,13 @@ function Paso({ n, titulo, extra, children }: { n: number; titulo: string; extra
   )
 }
 
-export default function RegistroManual({ idFormulario, onEnviar }: {
+export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
   idFormulario: string
   onEnviar: (datos: NuevoAcceso, fotos: { blob: Blob; etiqueta: string }[]) => void
+  /** Avisa al contenedor en qué paso va (para el texto del botón del pie) */
+  onPaso?: (p: PasoRegistro) => void
 }) {
+  const [paso, setPasoLocal] = useState<PasoRegistro>('fotos')
   const [tipo, setTipo] = useState<NuevoAcceso['tipo']>('PAQUETERIA')
   const [empresa, setEmpresa] = useState<string | null>(null)
   const [otraEmpresa, setOtraEmpresa] = useState('')
@@ -55,17 +59,26 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
   const [fotos, setFotos] = useState<FotoEvidencia[]>([])
   const [sugerencia, setSugerencia] = useState<Acceso | null>(null)
   const [error, setError] = useState('')
+  const inicio = useRef<HTMLDivElement>(null)
   const fotosRef = useRef(fotos)
   fotosRef.current = fotos
 
   useEffect(() => () => fotosRef.current.forEach((f) => URL.revokeObjectURL(f.url)), [])
 
-  const cambiarTipo = (t: NuevoAcceso['tipo']) => { setTipo(t); setEmpresa(null); setEtiquetas([]); setError('') }
+  const setPaso = (p: PasoRegistro) => {
+    setPasoLocal(p); onPaso?.(p); setError('')
+    requestAnimationFrame(() => inicio.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+  }
+  const cambiarTipo = (t: NuevoAcceso['tipo']) => {
+    setTipo(t); setEmpresa(null); setEtiquetas([]); setError('')
+    // Las fotos que no aplican al nuevo tipo se descartan (la de la placa se conserva)
+    const validas = new Set(['placa', ...GUIAS[t].map((g) => g.id)])
+    setFotos((f) => { f.filter((x) => !validas.has(x.slot)).forEach((x) => URL.revokeObjectURL(x.url)); return f.filter((x) => validas.has(x.slot)) })
+  }
 
   // ---- IA de placas + automatización por historial ----
   const alLeerPlaca = async (lectura: LecturaPlaca, foto: Blob) => {
     const url = URL.createObjectURL(foto)
-    // La foto de la placa ocupa su lugar en las fotos guiadas
     setFotos((f) => { f.filter((x) => x.slot === 'placa').forEach((x) => URL.revokeObjectURL(x.url)); return [{ blob: foto, url, slot: 'placa' }, ...f.filter((x) => x.slot !== 'placa')] })
     const v = VEHICULO_POR_IA[lectura.tipoVehiculo]
     if (v) setVehiculo(v)
@@ -79,138 +92,198 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
 
   const usarSugerencia = () => {
     if (!sugerencia) return
-    if (sugerencia.tipo !== 'VISITA_QR') setTipo(sugerencia.tipo)
+    if (sugerencia.tipo !== 'VISITA_QR' && sugerencia.tipo !== tipo) cambiarTipo(sugerencia.tipo)
     const lista = sugerencia.tipo === 'VISITA_QR' ? [] : EMPRESAS[sugerencia.tipo]
     if (sugerencia.tipo === 'VISITA_SIN_QR' || sugerencia.tipo === 'VISITA_QR') setNombre(sugerencia.nombre)
     else if (lista.includes(sugerencia.nombre)) setEmpresa(sugerencia.nombre)
     else { setEmpresa(OTRA); setOtraEmpresa(sugerencia.nombre) }
     setCasa(sugerencia.casa)
     setSugerencia(null)
-    toast.success('Datos completados con la visita anterior')
+    toast.success('Datos completados con la visita anterior', { description: 'Revisa la empresa y la casa en el paso 2.' })
   }
+
+  // Fotos del paso 1: placa (si aplica) + las del tipo
+  const guias = GUIAS[tipo]
+  const conPlaca = tienePlaca(vehiculo)
+  const totalFotos = guias.length + (conPlaca ? 1 : 0)
+  const fotoPlaca = fotos.find((f) => f.slot === 'placa')
+  const tomadas = fotos.filter((f) => (f.slot === 'placa' ? conPlaca : guias.some((g) => g.id === f.slot))).length
+  const faltanObligatorias = [
+    ...(conPlaca && !placas ? ['la placa'] : []),
+    ...guias.filter((g) => g.obligatoria && !fotos.some((f) => f.slot === g.id)).map((g) => g.titulo.toLowerCase()),
+  ]
 
   const enviar = (e: FormEvent) => {
     e.preventDefault()
+    if (paso === 'fotos') {
+      const falta = !vehiculo ? 'Elige cómo llegó.' : faltanObligatorias.length ? `Falta la foto de ${faltanObligatorias.join(', ')}.` : ''
+      if (falta) { setError(falta); toast.error(falta); return }
+      setPaso('datos')
+      return
+    }
     const esVisita = tipo === 'VISITA_SIN_QR'
     const quien = esVisita ? nombre.trim() : empresa === OTRA ? otraEmpresa.trim() : empresa
-    const falta =
-      !quien ? (esVisita ? 'Escribe el nombre de la visita.' : 'Elige la empresa.')
-      : !vehiculo ? 'Elige cómo llegó.'
-      : tienePlaca(vehiculo) && !placas ? 'Toma la foto de la placa o escríbela.'
-      : !casa ? 'Elige la casa destino.'
-      : ''
+    const falta = !quien ? (esVisita ? 'Escribe el nombre de la visita.' : 'Elige la empresa.') : !casa ? 'Elige la casa destino.' : ''
     if (falta) { setError(falta); toast.error(falta); return }
     setError('')
+    // Solo se envían las fotos que aplican al tipo y vehículo elegidos
+    const enviar = fotos.filter((f) => (f.slot === 'placa' ? conPlaca : guias.some((g) => g.id === f.slot)))
     onEnviar({
       tipo, casa, nombre: quien!, vehiculo,
-      color: tienePlaca(vehiculo) ? color : undefined,
-      placas: tienePlaca(vehiculo) ? placas : undefined,
+      color: conPlaca ? color : undefined,
+      placas: conPlaca ? placas : undefined,
       etiquetas: etiquetas.length ? etiquetas : undefined,
       nota: conNota && nota.trim() ? nota.trim() : undefined,
       paquete: tipo === 'PAQUETERIA' ? paquete : undefined,
       cantidad: tipo === 'PAQUETERIA' ? cantidad : undefined,
-    }, fotos.map((f) => ({ blob: f.blob, etiqueta: f.slot.startsWith('extra-') ? 'adicional' : f.slot })))
+    }, enviar.map((f) => ({ blob: f.blob, etiqueta: f.slot })))
   }
 
-  const empresas = EMPRESAS[tipo]
-
   return (
-    <form id={idFormulario} onSubmit={enviar} noValidate className="space-y-9">
-      <Paso n={1} titulo="¿Quién llega?">
-        <div role="group" aria-label="Tipo" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {TIPOS.map((t) => (
-            <button key={t.valor} type="button" aria-pressed={tipo === t.valor} onClick={() => cambiarTipo(t.valor)}
-              className={`flex flex-col items-center justify-center gap-2 h-[88px] rounded-[18px] text-[0.9375rem] font-medium
-                transition-[transform,background-color,box-shadow,color] duration-150 ease-[var(--ease-out)] active:scale-[0.97]
-                ${tipo === t.valor ? 'bg-acento/[0.08] text-acento ring-2 ring-inset ring-acento' : 'bg-panel ring-1 ring-inset ring-borde'}`}>
-              <Icon n={t.icono} size={26} />{t.etiqueta}
-            </button>
-          ))}
+    <form id={idFormulario} onSubmit={enviar} noValidate>
+      <div ref={inicio} className="scroll-mt-4" />
+
+      {/* Progreso de los dos pasos */}
+      <ol aria-label="Pasos del registro" className="mb-7 grid grid-cols-2 gap-2">
+        {([['fotos', '1', 'Fotos'], ['datos', '2', 'Datos']] as const).map(([p, n, t]) => {
+          const actual = paso === p
+          const hecho = p === 'fotos' && paso === 'datos'
+          return (
+            <li key={p} aria-current={actual ? 'step' : undefined}>
+              <button type="button" disabled={p === 'datos' && paso === 'fotos'} onClick={() => p === 'fotos' && setPaso('fotos')}
+                className="w-full text-left disabled:cursor-default">
+                <span className={`block h-1.5 rounded-full transition-colors duration-300 ${actual || hecho ? 'bg-acento' : 'bg-texto/[0.08]'}`} />
+                <span className={`mt-2 flex items-center gap-1.5 text-[0.875rem] font-semibold ${actual ? 'text-texto' : 'text-suave'}`}>
+                  {hecho ? <Icon n="check" size={15} stroke={3} /> : <span className="cifras">{n}.</span>}{t}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+
+      {paso === 'fotos' ? (
+        <div key="fotos" className="space-y-9">
+          <Seccion titulo="¿Quién llega?">
+            <div role="group" aria-label="Tipo" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {TIPOS.map((t) => (
+                <button key={t.valor} type="button" aria-pressed={tipo === t.valor} onClick={() => cambiarTipo(t.valor)}
+                  className={`flex flex-col items-center justify-center gap-2 h-[88px] rounded-[18px] text-[0.9375rem] font-medium
+                    transition-[transform,background-color,box-shadow,color] duration-150 ease-[var(--ease-out)] active:scale-[0.97]
+                    ${tipo === t.valor ? 'bg-acento/[0.08] text-acento ring-2 ring-inset ring-acento' : 'bg-panel ring-1 ring-inset ring-borde'}`}>
+                  <Icon n={t.icono} size={26} />{t.etiqueta}
+                </button>
+              ))}
+            </div>
+          </Seccion>
+
+          <Seccion titulo="¿Cómo llegó?" retraso={40}>
+            <Opciones etiqueta="Vehículo" valor={vehiculo} onCambio={(v) => setVehiculo(v ?? undefined)} cuadricula="grid grid-cols-3 sm:grid-cols-6 gap-2"
+              opciones={VEHICULOS.map((v) => ({ valor: v.valor, etiqueta: v.etiqueta }))} />
+          </Seccion>
+
+          <Seccion titulo="Fotos de evidencia" retraso={80}
+            extra={<span className="text-[0.8125rem] font-medium text-suave cifras">{tomadas} de {totalFotos}</span>}>
+            <div className="space-y-4">
+              {conPlaca && (
+                <ApartadoFoto numero={1} total={totalFotos} titulo="Placa del vehículo" icono="auto" obligatoria
+                  ayuda="Que se lean todos los caracteres. La IA llena la placa, el vehículo y el color." foto={fotoPlaca}>
+                  <div className="space-y-4">
+                    <LectorPlaca placa={placas} onPlaca={setPlacas} onLectura={alLeerPlaca} />
+                    {sugerencia && (
+                      <div role="status" className="anim-llenar flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-acento/[0.08] px-4 py-3.5 ring-1 ring-inset ring-acento/25">
+                        <div className="min-w-0">
+                          <p className="text-[0.9375rem] font-semibold">Esta placa ya vino antes</p>
+                          <p className="text-[0.875rem] text-suave">{sugerencia.nombre} → {sugerencia.casa} · {sugerencia.entrada.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                        <button type="button" onClick={usarSugerencia} className="btn-primario btn-chico">Usar esos datos</button>
+                      </div>
+                    )}
+                  </div>
+                </ApartadoFoto>
+              )}
+              <FotosGuiadas tipo={tipo} fotos={fotos} onCambio={setFotos} numeroInicial={conPlaca ? 2 : 1} total={totalFotos} />
+            </div>
+            <p className="mt-4 text-[0.8125rem] leading-[1.45] text-suave">
+              Nunca fotografíes rostros ni identificaciones completas. Las fotos se reducen, se les quita la ubicación
+              y se borran a los 90 días. Indica a la persona que el aviso de privacidad está en caseta.
+            </p>
+          </Seccion>
         </div>
-      </Paso>
-
-      <Paso n={2} titulo={tipo === 'VISITA_SIN_QR' ? 'Nombre de la visita' : 'Empresa'}>
-        {tipo === 'VISITA_SIN_QR' ? (
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} autoComplete="off" placeholder="Nombre completo"
-            className="block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave" />
-        ) : (
-          <div key={tipo} className="space-y-3">
-            <Opciones etiqueta="Empresa" valor={empresa} onCambio={setEmpresa}
-              opciones={[...empresas, OTRA].map((e) => ({ valor: e, etiqueta: e, extra: <LogoEmpresa nombre={e} size={22} /> }))} />
-            {empresa === OTRA && (
-              <input value={otraEmpresa} onChange={(e) => setOtraEmpresa(e.target.value)} maxLength={40} autoComplete="off" autoFocus
-                placeholder="¿Cuál empresa?" aria-label="Otra empresa"
-                className="anim-llenar block w-full h-12 rounded-[14px] bg-panel px-4 text-[1rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave" />
-            )}
+      ) : (
+        <div key="datos" className="space-y-9">
+          {/* Resumen del paso 1 */}
+          <div className="anim-entrar flex items-center gap-3 rounded-[20px] bg-panel shadow-tarjeta p-3 pr-4">
+            <div className="flex -space-x-3">
+              {fotos.slice(0, 3).map((f) => <img key={f.url} src={f.url} alt="" className="h-12 w-12 rounded-[12px] object-cover ring-2 ring-panel" />)}
+              {!fotos.length && <span className="grid place-items-center h-12 w-12 rounded-[12px] bg-fondo text-texto/60"><Icon n="camara" size={20} /></span>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.9375rem] font-semibold">{ETIQUETA_TIPO[tipo]}{placas && conPlaca ? ` · ${placas}` : ''}</p>
+              <p className="text-[0.8125rem] text-suave">{tomadas} foto{tomadas === 1 ? '' : 's'} · {VEHICULOS.find((v) => v.valor === vehiculo)?.etiqueta}</p>
+            </div>
+            <button type="button" onClick={() => setPaso('fotos')} className="text-[0.9375rem] font-medium text-acento min-h-11 px-1">Editar</button>
           </div>
-        )}
-      </Paso>
 
-      <Paso n={3} titulo="¿Cómo llegó?">
-        <Opciones etiqueta="Vehículo" valor={vehiculo} onCambio={(v) => setVehiculo(v ?? undefined)} cuadricula="grid grid-cols-3 sm:grid-cols-6 gap-2"
-          opciones={VEHICULOS.map((v) => ({ valor: v.valor, etiqueta: v.etiqueta }))} />
-        {tienePlaca(vehiculo) && (
-          <div className="anim-llenar mt-5 space-y-5">
-            <LectorPlaca placa={placas} onPlaca={setPlacas} onLectura={alLeerPlaca} />
-
-            {sugerencia && (
-              <div role="status" className="anim-llenar flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-acento/[0.08] px-4 py-3.5 ring-1 ring-inset ring-acento/25">
-                <div className="min-w-0">
-                  <p className="text-[0.9375rem] font-semibold">Esta placa ya vino antes</p>
-                  <p className="text-[0.875rem] text-suave">
-                    {sugerencia.nombre} → {sugerencia.casa} · {sugerencia.entrada.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                <button type="button" onClick={usarSugerencia} className="btn-primario btn-chico">Usar esos datos</button>
+          <Seccion titulo={tipo === 'VISITA_SIN_QR' ? 'Nombre de la visita' : 'Empresa'} retraso={40}>
+            {tipo === 'VISITA_SIN_QR' ? (
+              <input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} autoComplete="off" placeholder="Nombre completo"
+                className="block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave" />
+            ) : (
+              <div className="space-y-3">
+                <Opciones etiqueta="Empresa" valor={empresa} onCambio={setEmpresa}
+                  opciones={[...EMPRESAS[tipo], OTRA].map((e) => ({ valor: e, etiqueta: e, extra: <LogoEmpresa nombre={e} size={22} /> }))} />
+                {empresa === OTRA && (
+                  <input value={otraEmpresa} onChange={(e) => setOtraEmpresa(e.target.value)} maxLength={40} autoComplete="off" autoFocus
+                    placeholder="¿Cuál empresa?" aria-label="Otra empresa"
+                    className="anim-llenar block w-full h-12 rounded-[14px] bg-panel px-4 text-[1rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave" />
+                )}
               </div>
             )}
+          </Seccion>
 
-            <div>
-              <p className="mb-2 text-[0.875rem] text-suave">Color</p>
+          {conPlaca && (
+            <Seccion titulo="Color del vehículo" retraso={80} extra={<span className="text-[0.8125rem] text-suave">La IA lo sugiere</span>}>
               <Opciones etiqueta="Color" valor={color} onCambio={(v) => setColor(v ?? undefined)}
                 opciones={COLORES.map((c) => ({
                   valor: c.valor, etiqueta: c.etiqueta,
                   extra: <span aria-hidden="true" className="h-4 w-4 rounded-full ring-1 ring-inset ring-black/15" style={{ background: c.muestra }} />,
                 }))} />
+            </Seccion>
+          )}
+
+          <Seccion titulo="Casa destino" retraso={120} extra={casa && <span className="anim-llenar text-[0.9375rem] font-medium text-acento">{casa}</span>}>
+            <SelectorCasa valor={casa} onCambio={setCasa} />
+          </Seccion>
+
+          {tipo === 'PAQUETERIA' && (
+            <Seccion titulo="Entrega" retraso={160}>
+              <div className="space-y-3">
+                <Opciones etiqueta="Dónde se entrega" valor={paquete} onCambio={(v) => v && setPaquete(v)} opcional={false} cuadricula="grid grid-cols-2 gap-2"
+                  opciones={[{ valor: 'CASA', etiqueta: 'En la casa' }, { valor: 'CASETA', etiqueta: 'En caseta' }]} />
+                <Opciones etiqueta="Cantidad de paquetes" valor={cantidad} onCambio={(v) => v && setCantidad(v)} opcional={false}
+                  opciones={[{ valor: '1', etiqueta: '1 paquete' }, { valor: '2', etiqueta: '2 paquetes' }, { valor: '3+', etiqueta: '3 o más' }]} />
+              </div>
+            </Seccion>
+          )}
+
+          <Seccion titulo="Detalles" retraso={200} extra={<span className="text-[0.8125rem] text-suave">Opcional</span>}>
+            <div className="space-y-3">
+              <OpcionesMultiples etiqueta="Detalles" opciones={ETIQUETAS[tipo]} valores={etiquetas} onCambio={setEtiquetas} />
+              {conNota ? (
+                <textarea value={nota} onChange={(e) => setNota(e.target.value)} maxLength={280} rows={2} autoFocus aria-label="Nota"
+                  placeholder="Algo más que deba saberse"
+                  className="anim-llenar block w-full rounded-[14px] bg-panel px-4 py-3 text-[1rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave resize-none" />
+              ) : (
+                <button type="button" onClick={() => setConNota(true)} className="text-[0.9375rem] font-medium text-acento min-h-11">+ Agregar nota</button>
+              )}
             </div>
-          </div>
-        )}
-      </Paso>
-
-      <Paso n={4} titulo="Casa destino" extra={casa && <span className="anim-llenar text-[0.9375rem] font-medium text-acento">{casa}</span>}>
-        <SelectorCasa valor={casa} onCambio={setCasa} />
-      </Paso>
-
-      {tipo === 'PAQUETERIA' && (
-        <Paso n={5} titulo="Entrega">
-          <div className="space-y-3">
-            <Opciones etiqueta="Dónde se entrega" valor={paquete} onCambio={(v) => v && setPaquete(v)} opcional={false} cuadricula="grid grid-cols-2 gap-2"
-              opciones={[{ valor: 'CASA', etiqueta: 'En la casa' }, { valor: 'CASETA', etiqueta: 'En caseta' }]} />
-            <Opciones etiqueta="Cantidad de paquetes" valor={cantidad} onCambio={(v) => v && setCantidad(v)} opcional={false}
-              opciones={[{ valor: '1', etiqueta: '1 paquete' }, { valor: '2', etiqueta: '2 paquetes' }, { valor: '3+', etiqueta: '3 o más' }]} />
-          </div>
-        </Paso>
+          </Seccion>
+        </div>
       )}
 
-      <Paso n={6} titulo="Detalles" extra={<span className="text-[0.8125rem] text-suave">Opcional</span>}>
-        <div className="space-y-3">
-          <OpcionesMultiples etiqueta="Detalles" opciones={ETIQUETAS[tipo]} valores={etiquetas} onCambio={setEtiquetas} />
-          {conNota ? (
-            <textarea value={nota} onChange={(e) => setNota(e.target.value)} maxLength={280} rows={2} autoFocus aria-label="Nota"
-              placeholder="Algo más que deba saberse"
-              className="anim-llenar block w-full rounded-[14px] bg-panel px-4 py-3 text-[1rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave resize-none" />
-          ) : (
-            <button type="button" onClick={() => setConNota(true)} className="text-[0.9375rem] font-medium text-acento min-h-11">+ Agregar nota</button>
-          )}
-        </div>
-      </Paso>
-
-      <Paso n={7} titulo="Fotos de evidencia">
-        <FotosGuiadas tipo={tipo} vehiculo={vehiculo} fotos={fotos} onCambio={setFotos} />
-      </Paso>
-
       {error && (
-        <p role="alert" className="flex items-start gap-2 text-[0.9375rem] text-peligro">
+        <p role="alert" className="mt-6 flex items-start gap-2 text-[0.9375rem] text-peligro">
           <span className="mt-0.5 shrink-0"><Icon n="alerta" size={18} /></span>{error}
         </p>
       )}

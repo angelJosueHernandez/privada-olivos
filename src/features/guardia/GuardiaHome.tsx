@@ -3,13 +3,15 @@ import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { hayApi } from '../../shared/api/cliente'
+import { useAuth } from '../auth/AuthContext'
+import DetalleAcceso from '../caseta/DetalleAcceso'
 import Escaner from '../caseta/Escaner'
 import LogoEmpresa, { tieneInsignia } from '../caseta/LogoEmpresa'
 import { BotonCampana, PanelNotificaciones, useNotificaciones } from '../caseta/Notificaciones'
-import RegistroManual from '../caseta/RegistroManual'
+import RegistroManual, { PasoRegistro } from '../caseta/RegistroManual'
 import ResultadoPase, { verificacionesDe } from '../caseta/ResultadoPase'
 import { casetaService } from '../caseta/casetaService'
-import { Acceso, ETIQUETA_TIPO, NuevoAcceso, TipoAcceso, Validacion } from '../caseta/tipos'
+import { Acceso, Actor, ETIQUETA_TIPO, NuevoAcceso, TipoAcceso, Validacion } from '../caseta/tipos'
 
 type Vista =
   | { modo: 'escaner' }
@@ -18,6 +20,7 @@ type Vista =
   | { modo: 'manual' }
   | { modo: 'registrado'; titulo: string; detalle: string; logo?: string }
   | { modo: 'notificaciones' }
+  | { modo: 'detalle'; acceso: Acceso }
   | null
 type Filtro = 'dentro' | 'caseta' | 'todos'
 
@@ -34,7 +37,11 @@ const tiempoDentro = (a: Acceso, ahora: Date) => ahora.getTime() - a.entrada.get
 const duracion = (ms: number) => { const m = Math.max(0, Math.floor(ms / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min` }
 
 export default function GuardiaHome() {
+  const { user } = useAuth()
+  // Quién hace las acciones en este dispositivo. Con API el servidor lo toma de la sesión (no de aquí).
+  const actor: Actor = { id: user?.id ?? '', nombre: user?.nombre ?? 'Guardia', rol: 'GUARDIA' }
   const [vista, setVista] = useState<Vista>(null)
+  const [pasoManual, setPasoManual] = useState<PasoRegistro>('fotos')
   const [accesos, setAccesos] = useState<Acceso[]>([])
   const [cargandoLista, setCargandoLista] = useState(true)
   const [filtro, setFiltro] = useState<Filtro>('dentro')
@@ -87,7 +94,7 @@ export default function GuardiaHome() {
     if (!v.pase) return
     setEnviando(true)
     try {
-      const a = await casetaService.registrarEntradaConPase(v.pase)
+      const a = await casetaService.registrarEntradaConPase(v.pase, actor)
       notificar('entrada', 'Entrada registrada', `${a.nombre} → ${a.casa}`)
       setFiltro('dentro'); marcarNuevo(a.id); recargar()
       confirmar('Entrada registrada', `${a.nombre} → ${a.casa} · ${horaCorta(a.entrada)}`)
@@ -98,7 +105,7 @@ export default function GuardiaHome() {
   const registrarManual = async (datos: NuevoAcceso, fotos: { blob: Blob; etiqueta: string }[]) => {
     setEnviando(true)
     try {
-      const a = await casetaService.registrarManual(datos, fotos)
+      const a = await casetaService.registrarManual(datos, fotos, actor)
       notificar('entrada', `${ETIQUETA_TIPO[a.tipo]} registrada`,
         `${a.nombre} → ${a.casa}${fotos.length ? ` · ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}`)
       // Automatización: si el paquete se queda en caseta, se avisa a la casa
@@ -114,7 +121,7 @@ export default function GuardiaHome() {
 
   const registrarSalida = async (a: Acceso) => {
     try {
-      await casetaService.registrarSalida(a.id)
+      await casetaService.registrarSalida(a.id, actor)
       notificar('salida', `Salida · ${a.nombre}`, `${a.casa} · estuvo ${duracion(Date.now() - a.entrada.getTime())}`)
       recargar()
     } catch { notificar('error', 'No se pudo registrar la salida') }
@@ -122,7 +129,7 @@ export default function GuardiaHome() {
 
   const entregar = async (a: Acceso) => {
     try {
-      await casetaService.entregarPaquete(a.id)
+      await casetaService.entregarPaquete(a.id, actor)
       notificar('entrega', 'Paquete entregado', `${a.nombre} → ${a.casa}`)
       recargar()
     } catch { notificar('error', 'No se pudo marcar la entrega') }
@@ -155,7 +162,7 @@ export default function GuardiaHome() {
             <span className="block text-[0.9375rem] opacity-85">Visitas con pase del residente</span>
           </span>
         </button>
-        <button onClick={() => setVista({ modo: 'manual' })} style={{ animationDelay: '50ms' }}
+        <button onClick={() => { setPasoManual('fotos'); setVista({ modo: 'manual' }) }} style={{ animationDelay: '50ms' }}
           className="anim-entrar flex items-center gap-4 rounded-[24px] bg-panel px-5 py-5 sm:py-6 text-left shadow-tarjeta
             transition-transform duration-150 ease-[var(--ease-out)] active:scale-[0.98]">
           <span className="grid place-items-center h-14 w-14 shrink-0 rounded-[18px] bg-fondo text-texto/80"><Icon n="paquete" size={30} /></span>
@@ -202,7 +209,9 @@ export default function GuardiaHome() {
                 const largo = estaDentro(a) && tiempoDentro(a, ahora) > LIMITE_ESTANCIA_MS
                 return (
                   <li key={a.id} style={{ animationDelay: a.id === nuevoId ? undefined : `${Math.min(i * 35, 210)}ms` }}
-                    className={`${a.id === nuevoId ? 'anim-resaltar' : 'anim-entrar'} flex items-center gap-4 px-4 sm:px-5 py-4`}>
+                    className={`${a.id === nuevoId ? 'anim-resaltar' : 'anim-entrar'} flex items-center gap-3 px-4 sm:px-5 py-4`}>
+                    <button type="button" onClick={() => setVista({ modo: 'detalle', acceso: a })} aria-label={`Ver detalle de ${a.nombre}, ${a.casa}`}
+                      className="flex min-w-0 flex-1 items-center gap-4 text-left rounded-[14px] -m-1.5 p-1.5 hover:bg-texto/[0.03] active:bg-texto/[0.05] transition-colors">
                     {tieneInsignia(a.nombre) ? (
                       <LogoEmpresa nombre={a.nombre} size={44} />
                     ) : (
@@ -221,8 +230,11 @@ export default function GuardiaHome() {
                         {largo && <span className="rounded-md bg-peligro/[0.1] px-1.5 py-0.5 font-semibold text-peligro">{duracion(tiempoDentro(a, ahora))} dentro</span>}
                         {a.fotos.length > 0 && <span className="inline-flex items-center gap-1 text-suave"><Icon n="camara" size={14} />{a.fotos.length}</span>}
                       </div>
+                      <p className="mt-1 text-[0.8125rem] text-suave truncate">Registró {a.registradoPor.nombre}{a.paseCreadoPor ? ` · pase de ${a.paseCreadoPor.nombre}` : ''}</p>
                     </div>
-                    {a.fotos[0] && <img src={a.fotos[0]} alt="Evidencia" className="hidden sm:block h-12 w-12 rounded-[10px] object-cover" />}
+                    {a.fotos[0] && <img src={a.fotos[0]} alt="" className="hidden sm:block h-12 w-12 rounded-[10px] object-cover" />}
+                    <span className="hidden sm:block rotate-180 text-texto/30"><Icon n="atras" size={18} /></span>
+                    </button>
                     {estaDentro(a) && <button onClick={() => registrarSalida(a)} className="btn-secundario btn-chico shrink-0">Salida</button>}
                     {enCaseta(a) && <button onClick={() => entregar(a)} className="btn-primario btn-chico shrink-0">Entregar</button>}
                   </li>
@@ -252,7 +264,7 @@ export default function GuardiaHome() {
                   </button>
                 </>
               ) : (
-                <button onClick={() => setVista({ modo: 'manual' })} className="btn-primario w-full">Registrar sin código</button>
+                <button onClick={() => { setPasoManual('fotos'); setVista({ modo: 'manual' }) }} className="btn-primario w-full">Registrar sin código</button>
               )}
               <button onClick={() => setVista({ modo: 'escaner' })} className="btn-secundario w-full">Escanear otro</button>
             </div>
@@ -273,10 +285,12 @@ export default function GuardiaHome() {
         <Hoja titulo="Registrar sin código" onCerrar={cerrar}
           pie={
             <button type="submit" form={FORM_MANUAL} disabled={enviando} className="btn-primario w-full">
-              <Icon n="entrada" size={20} />{enviando ? 'Guardando…' : 'Registrar entrada'}
+              {pasoManual === 'fotos'
+                ? <>Continuar a datos<span className="rotate-180 inline-flex"><Icon n="atras" size={20} /></span></>
+                : <><Icon n="entrada" size={20} />{enviando ? 'Guardando…' : 'Registrar entrada'}</>}
             </button>
           }>
-          <RegistroManual idFormulario={FORM_MANUAL} onEnviar={registrarManual} />
+          <RegistroManual idFormulario={FORM_MANUAL} onEnviar={registrarManual} onPaso={setPasoManual} />
         </Hoja>
       )}
 
@@ -296,6 +310,7 @@ export default function GuardiaHome() {
       )}
 
       {vista?.modo === 'notificaciones' && <PanelNotificaciones eventos={eventos} onCerrar={cerrar} />}
+      {vista?.modo === 'detalle' && <DetalleAcceso acceso={vista.acceso} onCerrar={cerrar} />}
     </>
   )
 }

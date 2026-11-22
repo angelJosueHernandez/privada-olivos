@@ -4,6 +4,8 @@ export { rutaInicio } from './permisos'
 
 type Ctx = {
   user: Usuario | null
+  /** Cuándo inició la sesión actual (se muestra en el perfil) */
+  inicioSesion: Date | null
   pendiente2fa: boolean
   login: (email: string, password: string) => Promise<void>
   verificar2fa: (codigo: string) => Promise<void>
@@ -21,17 +23,19 @@ const congelar = (u: Usuario): Usuario => Object.freeze({ ...u })
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Usuario | null>(null)
   const [pendiente, setPendiente] = useState<Usuario | null>(null)
+  const [inicioSesion, setInicioSesion] = useState<Date | null>(null)
 
   const login = useCallback<Ctx['login']>(async (email, password) => {
     const r = await authService.login(email, password)
     if (r.requiere2fa) setPendiente(congelar(r.usuario))
-    else setUser(congelar(r.usuario))
+    else { setUser(congelar(r.usuario)); setInicioSesion(new Date()) }
   }, [])
 
   const verificar2fa = useCallback<Ctx['verificar2fa']>(async (codigo) => {
     if (!pendiente) throw new Error('Inicia sesión de nuevo.')
     await authService.verificar2fa(codigo)
     setUser(pendiente)
+    setInicioSesion(new Date())
     setPendiente(null)
   }, [pendiente])
 
@@ -39,11 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null)
     setPendiente(null)
+    setInicioSesion(null)
     void authService.logout()
     // Reemplaza la entrada actual para que "atrás" no regrese a una pantalla protegida
     window.history.replaceState(null, '', '/login')
   }, [])
 
-  const valor = useMemo(() => ({ user, pendiente2fa: !!pendiente, login, verificar2fa, logout }), [user, pendiente, login, verificar2fa, logout])
+  const valor = useMemo(() => ({ user, inicioSesion, pendiente2fa: !!pendiente, login, verificar2fa, logout }), [user, inicioSesion, pendiente, login, verificar2fa, logout])
   return <AuthCtx.Provider value={valor}>{children}</AuthCtx.Provider>
 }

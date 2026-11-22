@@ -29,12 +29,13 @@ export default function AppShell() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden sm:flex items-center gap-2.5 pr-2 text-[0.875rem] text-suave">
-              <span aria-hidden="true" className="grid place-items-center h-8 w-8 rounded-full bg-acento/15 text-acento text-[0.75rem] font-semibold">
+            <Link to="/perfil" aria-label={`Mi perfil: ${user.nombre}`}
+              className="flex items-center gap-2.5 rounded-full pr-1 sm:pr-3 text-[0.875rem] text-suave hover:bg-texto/[0.05] transition-colors">
+              <span aria-hidden="true" className="grid place-items-center h-9 w-9 rounded-full bg-acento/15 text-acento text-[0.75rem] font-semibold">
                 {iniciales(user.nombre)}
               </span>
-              {user.nombre}
-            </span>
+              <span className="hidden sm:inline">{user.nombre}</span>
+            </Link>
             <button onClick={logout} aria-label="Cerrar sesión"
               className="btn-secundario btn-chico whitespace-nowrap max-sm:w-11 max-sm:h-11 max-sm:px-0">
               <Icon n="salir" size={18} />

@@ -1,7 +1,7 @@
 import { api, ErrorApi, hayApi } from '../../shared/api/cliente'
 
 export type Rol = 'ADMIN' | 'RESIDENTE' | 'GUARDIA'
-export type Usuario = { id: string; nombre: string; rol: Rol; casa?: string }
+export type Usuario = { id: string; nombre: string; rol: Rol; casa?: string; email?: string }
 
 /*
   Servicio de autenticación.
@@ -13,9 +13,9 @@ export type Usuario = { id: string; nombre: string; rol: Rol; casa?: string }
 export const MODO_DEMO = !hayApi
 
 const DEMO: Record<string, Usuario> = {
-  '06067b8d70f90d3cbc8bc09757b9816585699477405732ab821d3fb39147fdb3': { id: '1', nombre: 'Alejandro Garza', rol: 'ADMIN' },
-  '422a5ba68a9a9ff0b77c72a99d82da60e324088f07d09ef3ba04f9ec7f0f2451': { id: '2', nombre: 'María Treviño', rol: 'RESIDENTE', casa: 'Calle Palma 104' },
-  '72c53fa3cd5ba5cf88b1b73ccc82ba26f4883211115c86e2590b05c8b73ae85e': { id: '3', nombre: 'Luis Herrera', rol: 'GUARDIA' },
+  '06067b8d70f90d3cbc8bc09757b9816585699477405732ab821d3fb39147fdb3': { id: '1', nombre: 'Alejandro Garza', rol: 'ADMIN', email: 'admin@demo.mx' },
+  '422a5ba68a9a9ff0b77c72a99d82da60e324088f07d09ef3ba04f9ec7f0f2451': { id: 'u-res-2', nombre: 'María Treviño', rol: 'RESIDENTE', casa: 'Calle Palma 104', email: 'residente@demo.mx' },
+  '72c53fa3cd5ba5cf88b1b73ccc82ba26f4883211115c86e2590b05c8b73ae85e': { id: '3', nombre: 'Luis Herrera', rol: 'GUARDIA', email: 'guardia@demo.mx' },
 }
 const DEMO_2FA = '220f3d1e7e34b05aa0fdae94fb025f6edb9218a8fef6e1c639eb7003493d3239'
 
@@ -32,7 +32,11 @@ function validarUsuario(u: unknown): Usuario {
   if (!x || typeof x.id !== 'string' || typeof x.nombre !== 'string' || !ROLES.includes(x.rol as Rol)) {
     throw new ErrorApi('Respuesta inesperada del servidor.', 0)
   }
-  return { id: x.id, nombre: x.nombre.slice(0, 120), rol: x.rol as Rol, casa: typeof x.casa === 'string' ? x.casa.slice(0, 120) : undefined }
+  return {
+    id: x.id, nombre: x.nombre.slice(0, 120), rol: x.rol as Rol,
+    casa: typeof x.casa === 'string' ? x.casa.slice(0, 120) : undefined,
+    email: typeof x.email === 'string' ? x.email.slice(0, 254) : undefined,
+  }
 }
 
 export const LIMITES = { email: 254, password: 128 } as const
