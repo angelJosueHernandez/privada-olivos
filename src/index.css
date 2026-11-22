@@ -66,6 +66,23 @@
   .titulo-grande { @apply text-[2.125rem] leading-[1.1] font-bold tracking-[-0.025em] sm:text-[2.5rem]; }
 }
 
+/* Tipografía de lectura para documentos legales */
+@layer components {
+  .legal { @apply max-w-[68ch] text-[1.0625rem] leading-[1.6] text-texto; }
+  .legal section + section { @apply mt-10; }
+  .legal h2 { @apply text-[1.375rem] font-semibold tracking-[-0.015em] leading-[1.25] mb-3 text-balance; }
+  .legal p, .legal li, .legal td { text-wrap: pretty; }
+  .legal h3 { @apply text-[1.0625rem] font-semibold mt-5 mb-2; }
+  .legal p + p { @apply mt-3; }
+  .legal ul { @apply mt-3 space-y-2 pl-5 list-disc marker:text-suave; }
+  .legal ul + p, .legal p + ul { @apply mt-3; }
+  .legal strong { @apply font-semibold; }
+  .legal a { @apply text-acento underline underline-offset-4; }
+  .legal table { @apply mt-4 w-full text-left text-[0.9375rem]; }
+  .legal th { @apply py-2 pr-4 font-semibold border-b border-borde align-bottom; }
+  .legal td { @apply py-3 pr-4 border-b border-separador align-top; }
+}
+
 @layer utilities {
   .cifras { font-variant-numeric: tabular-nums; }
 }
@@ -81,6 +98,35 @@
 }
 .anim-entrar { animation: entrar 260ms var(--ease-out) both; }
 .anim-sacudir { animation: sacudir 300ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+/* Hoja a pantalla completa: sube desde abajo con la curva de cajón de iOS */
+@keyframes hoja { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+.anim-hoja { animation: hoja 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) { .anim-hoja { animation: aparecer 200ms ease both; } }
+
+/* Resultado del pase: el ícono "aparece" con un rebote leve (evento poco frecuente, se permite) */
+@keyframes pop { 0% { opacity: 0; transform: scale(0.6); } 60% { opacity: 1; transform: scale(1.06); } 100% { transform: scale(1); } }
+.anim-pop { animation: pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+/* La palomita se dibuja después del pop */
+@keyframes trazo { to { stroke-dashoffset: 0; } }
+.anim-trazo path { stroke-dasharray: 32; stroke-dashoffset: 32; animation: trazo 360ms 180ms var(--ease-out) forwards; }
+/* Registro nuevo en la bitácora: entra y se ilumina un instante para que el guardia lo ubique */
+@keyframes resaltar { from { background-color: rgb(var(--ok) / 0.14); } to { background-color: transparent; } }
+.anim-resaltar { animation: entrar 260ms var(--ease-out) both, resaltar 1600ms 200ms ease-out both; }
+/* Barrido de lectura de la IA sobre la foto de la placa */
+@keyframes barrido { from { transform: translateY(-100%); } to { transform: translateY(300%); } }
+.anim-barrido { animation: barrido 1.4s ease-in-out infinite alternate; }
+/* Datos que llena la IA: se enfocan desde un leve desenfoque */
+@keyframes llenar { from { opacity: 0; transform: translateY(4px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.anim-llenar { animation: llenar 320ms var(--ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  .anim-pop, .anim-resaltar, .anim-llenar { animation: aparecer 200ms ease both; }
+  .anim-barrido { animation: none; opacity: 0; }
+  .anim-trazo path { animation: none; stroke-dashoffset: 0; }
+}
+
+/* Cursor del cuadro activo del código: parpadeo como el cursor del sistema */
+@keyframes parpadeo { 0%, 45% { opacity: 1; } 55%, 100% { opacity: 0; } }
+.anim-parpadeo { animation: parpadeo 1s step-end infinite; }
 
 /* Reducir movimiento: sin desplazamientos ni sacudidas, pero se conserva un fundido breve */
 @keyframes aparecer { from { opacity: 0; } }

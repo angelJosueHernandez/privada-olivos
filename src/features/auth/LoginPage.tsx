@@ -1,12 +1,28 @@
-import { FormEvent, ReactNode, useRef, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import Marca from '../../shared/ui/Marca'
 import PanelLogin, { ListaFunciones } from './PanelLogin'
+import CodigoOTP from './CodigoOTP'
 import { rutaInicio, useAuth } from './AuthContext'
+import { LIMITES } from './authService'
 
 const CLAVE = 'privada.email'
-const leerEmail = () => { try { return localStorage.getItem(CLAVE) ?? '' } catch { return '' } }
+// Solo se recuerda el correo (nunca la contraseña ni la sesión), y se valida al leerlo
+const leerEmail = () => {
+  try {
+    const v = localStorage.getItem(CLAVE) ?? ''
+    return v.length <= LIMITES.email && /^[^\s@<>"']+@[^\s@<>"']+$/.test(v) ? v : ''
+  } catch { return '' }
+}
+
+/*
+  Límite de intentos en la interfaz: después de 5 fallos se bloquea con espera progresiva
+  (30 s, 60 s, 120 s… hasta 15 min). Es solo una barrera de experiencia: la protección real
+  contra fuerza bruta debe estar en la API (rate limiting y bloqueo de cuenta).
+*/
+const INTENTOS_LIBRES = 5
+const esperaTras = (fallos: number) => Math.min(30_000 * 2 ** (fallos - INTENTOS_LIBRES), 15 * 60_000)
 const guardarEmail = (v: string | null) => {
   try { v ? localStorage.setItem(CLAVE, v) : localStorage.removeItem(CLAVE) } catch { /* sin almacenamiento */ }
 }
@@ -54,6 +70,16 @@ export default function LoginPage() {
   const [fallo, setFallo] = useState<Fallo>(null)
   const grupo = useRef<HTMLDivElement>(null)
   const [cargando, setCargando] = useState(false)
+  const [fallos, setFallos] = useState(0)
+  const [bloqueadoHasta, setBloqueadoHasta] = useState(0)
+  const [ahora, setAhora] = useState(() => Date.now())
+
+  // Cuenta regresiva mientras dura el bloqueo
+  useEffect(() => {
+    if (bloqueadoHasta <= Date.now()) return
+    const t = setInterval(() => setAhora(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [bloqueadoHasta])
 
   if (user) return <Navigate to={rutaInicio(user.rol)} replace />
 
@@ -66,34 +92,66 @@ export default function LoginPage() {
     el.classList.add('anim-sacudir')
   }
   const fallar = (mensaje: string, campo: Fallo) => { setError(mensaje); setFallo(campo); sacudir() }
+  const segundosBloqueo = Math.max(0, Math.ceil((bloqueadoHasta - ahora) / 1000))
+  const bloqueado = segundosBloqueo > 0
+  // Un intento rechazado por el servidor (no cuenta dejar campos vacíos)
+  const registrarFallo = () => {
+    const n = fallos + 1
+    setFallos(n)
+    if (n >= INTENTOS_LIBRES) { setBloqueadoHasta(Date.now() + esperaTras(n)); setAhora(Date.now()) }
+  }
+
+  // Verifica el código; si falla, vacía los cuadros para escribirlo de nuevo sin perder el foco
+  const verificarCodigo = async (c: string) => {
+    setError('')
+    setFallo(null)
+    setCargando(true)
+    try {
+      await verificar2fa(c)
+    } catch (err) {
+      fallar(err instanceof Error ? err.message : 'No se pudo verificar el código. Intenta de nuevo.', 'codigo')
+      setCodigo('')
+      registrarFallo()
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  // Al completar los 6 dígitos (a mano, pegando o con el autocompletado) se verifica solo
+  const cambiarCodigo = (v: string) => {
+    if (cargando || bloqueado) return
+    setCodigo(v)
+    if (error) { setError(''); setFallo(null) }
+    if (v.length === 6) verificarCodigo(v)
+  }
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
+    if (cargando || bloqueado) return
+    if (pendiente2fa) {
+      if (codigo.length !== 6) return fallar('Escribe los 6 dígitos del código.', 'codigo')
+      return verificarCodigo(codigo)
+    }
     setError('')
     setFallo(null)
-    if (pendiente2fa) {
-      if (codigo.trim().length !== 6) return fallar('Escribe los 6 dígitos del código.', 'codigo')
-    } else if (!email.trim() || !password) {
+    if (!email.trim() || !password) {
       const campo: Fallo = !email.trim() && !password ? 'ambos' : !email.trim() ? 'email' : 'password'
       return fallar(campo === 'email' ? 'Escribe tu correo.' : campo === 'password' ? 'Escribe tu contraseña.' : 'Escribe tu correo y tu contraseña.', campo)
     }
     setCargando(true)
     try {
-      if (pendiente2fa) {
-        await verificar2fa(codigo.trim())
-      } else {
-        await login(email, password)
-        guardarEmail(recordar ? email.trim() : null)
-      }
+      await login(email, password)
+      guardarEmail(recordar ? email.trim() : null)
     } catch (err) {
-      fallar(err instanceof Error ? err.message : 'No se pudo iniciar sesión. Intenta de nuevo.', pendiente2fa ? 'codigo' : 'ambos')
+      fallar(err instanceof Error ? err.message : 'No se pudo iniciar sesión. Intenta de nuevo.', 'ambos')
+      registrarFallo()
     } finally {
       setCargando(false)
     }
   }
 
   const volver = () => { setCodigo(''); setError(''); setFallo(null); logout() }
-  const describe = error ? 'error-acceso' : undefined
+  const describe = error || bloqueado ? 'error-acceso' : undefined
   const invalido = (campo: 'email' | 'password' | 'codigo') => (fallo === campo || (fallo === 'ambos' && campo !== 'codigo')) || undefined
 
   return (
@@ -133,21 +191,12 @@ export default function LoginPage() {
           <form onSubmit={enviar} noValidate className="mt-8">
             <div ref={grupo} className="space-y-3">
               {pendiente2fa ? (
-                <label className="block">
-                  <span className="sr-only">Código de verificación</span>
-                  <input
-                    className="block w-full h-16 rounded-[14px] bg-fondo text-center text-[1.75rem] font-semibold cifras tracking-[0.45em] pl-[0.45em] text-texto
-                      placeholder:text-suave outline-none ring-inset focus:bg-panel focus:ring-[1.5px] focus:ring-acento
-                      aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-peligro/60"
-                    inputMode="numeric" pattern="[0-9]*" maxLength={6} autoComplete="one-time-code" autoFocus required
-                    placeholder="000000" value={codigo}
-                    onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
-                    aria-invalid={invalido('codigo')} aria-describedby={describe} />
-                </label>
+                <CodigoOTP valor={codigo} onCambio={cambiarCodigo}
+                  invalido={invalido('codigo')} describe={describe} />
               ) : (
                 <>
                   <Campo id="email" icono="correo" etiqueta="Correo electrónico">
-                    <input id="email" className={entrada} type="email" inputMode="email" autoComplete="username"
+                    <input id="email" className={entrada} type="email" inputMode="email" autoComplete="username" maxLength={LIMITES.email}
                       autoCapitalize="none" spellCheck={false} placeholder="Correo electrónico" required
                       value={email} onChange={(e) => setEmail(e.target.value)}
                       aria-invalid={invalido('email')} aria-describedby={describe} />
@@ -161,7 +210,7 @@ export default function LoginPage() {
                       </button>
                     }>
                     <input id="password" className={`${entrada} pr-14`} type={ver ? 'text' : 'password'}
-                      autoComplete="current-password" placeholder="Contraseña" required
+                      autoComplete="current-password" maxLength={LIMITES.password} placeholder="Contraseña" required
                       value={password} onChange={(e) => setPassword(e.target.value)}
                       aria-invalid={invalido('password')} aria-describedby={describe} />
                   </Campo>
@@ -169,9 +218,12 @@ export default function LoginPage() {
               )}
             </div>
 
-            {error && (
+            {(error || bloqueado) && (
               <p id="error-acceso" role="alert" className="mt-3 flex items-start gap-2 text-[0.9375rem] text-peligro">
-                <span className="mt-0.5 shrink-0"><Icon n="alerta" size={18} /></span>{error}
+                <span className="mt-0.5 shrink-0"><Icon n="alerta" size={18} /></span>
+                {bloqueado
+                  ? `Demasiados intentos. Espera ${segundosBloqueo >= 60 ? `${Math.ceil(segundosBloqueo / 60)} min` : `${segundosBloqueo} s`} para intentar de nuevo.`
+                  : error}
               </p>
             )}
 
@@ -203,7 +255,7 @@ export default function LoginPage() {
               </p>
             )}
 
-            <button disabled={cargando} className="btn-primario w-full mt-6">
+            <button disabled={cargando || bloqueado} className="btn-primario w-full mt-6">
               {cargando && <span aria-hidden="true" className="h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-[spin_0.7s_linear_infinite]" />}
               {cargando ? 'Verificando…' : pendiente2fa ? 'Verificar' : 'Continuar'}
             </button>
@@ -219,14 +271,24 @@ export default function LoginPage() {
           <div className="mt-5 space-y-2 text-center lg:text-left">
             <p className="text-[0.875rem] leading-[1.45] text-suave text-balance lg:[text-wrap:pretty]">
               <span className="inline-block align-[-3px] mr-1.5 text-suave"><Icon n="candado" size={15} stroke={2} /></span>
-              <span className="font-semibold text-texto">Cuenta protegida.</span>{' '}
-              Te pedimos un código de tu app de autenticación al entrar.
+              {pendiente2fa ? (
+                <>Se verifica en cuanto completas los 6 dígitos. También puedes pegarlo.</>
+              ) : (
+                <><span className="font-semibold text-texto">Cuenta protegida.</span>{' '}
+                Te pedimos un código de tu app de autenticación al entrar.</>
+              )}
             </p>
             {!pendiente2fa && (
               <p className="text-[0.875rem] leading-[1.45] text-suave text-balance lg:[text-wrap:pretty]">
                 ¿Aún no tienes acceso? Pídelo a la administración de tu privada.
               </p>
             )}
+            <p className="pt-2 text-[0.8125rem] leading-[1.45] text-suave text-balance lg:[text-wrap:pretty]">
+              Al continuar aceptas los{' '}
+              <Link to="/terminos" className="font-medium text-texto underline underline-offset-4 decoration-borde hover:decoration-texto">Términos y condiciones</Link>
+              {' '}y el{' '}
+              <Link to="/privacidad" className="font-medium text-texto underline underline-offset-4 decoration-borde hover:decoration-texto">Aviso de privacidad</Link>.
+            </p>
           </div>
 
           {!pendiente2fa && (

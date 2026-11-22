@@ -2,11 +2,16 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Las respuestas de la API (datos de residentes, pagos, sesión) nunca se guardan en caché
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [],
+      },
       manifest: {
         name: 'Mi Privada',
         short_name: 'Privada',
@@ -19,4 +24,11 @@ export default defineConfig({
       },
     }),
   ],
-})
+  build: {
+    // Sin mapas de código fuente en producción: no se publica el código original legible
+    sourcemap: false,
+  },
+  esbuild: mode === 'production'
+    ? { drop: ['console', 'debugger'], legalComments: 'none' }
+    : undefined,
+}))

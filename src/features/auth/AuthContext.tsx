@@ -1,5 +1,6 @@
-import { createContext, ReactNode, useContext, useState } from 'react'
-import { authService, Rol, Usuario } from './authService'
+import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from 'react'
+import { authService, Usuario } from './authService'
+export { rutaInicio } from './permisos'
 
 type Ctx = {
   user: Usuario | null
@@ -11,30 +12,38 @@ type Ctx = {
 const AuthCtx = createContext<Ctx>(null!)
 export const useAuth = () => useContext(AuthCtx)
 
-export const rutaInicio = (rol: Rol) =>
-  ({ ADMIN: '/admin', RESIDENTE: '/residente', GUARDIA: '/guardia' })[rol]
+// El usuario solo nace de una respuesta validada del servicio y queda congelado:
+// ningún código, parámetro de URL ni consola puede cambiarle el rol a mitad de la sesión.
+const congelar = (u: Usuario): Usuario => Object.freeze({ ...u })
 
-// La sesion vive solo en memoria (no en localStorage) para reducir el riesgo de robo por XSS.
-// Con la API real, la sesion se recupera con la cookie HttpOnly de renovacion.
+// La sesión vive solo en memoria (no en localStorage) para reducir el riesgo de robo por XSS.
+// Con la API real, la sesión se recupera con la cookie HttpOnly de renovación.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Usuario | null>(null)
   const [pendiente, setPendiente] = useState<Usuario | null>(null)
 
-  const login: Ctx['login'] = async (email, password) => {
+  const login = useCallback<Ctx['login']>(async (email, password) => {
     const r = await authService.login(email, password)
-    if (r.requiere2fa) setPendiente(r.usuario)
-    else setUser(r.usuario)
-  }
-  const verificar2fa: Ctx['verificar2fa'] = async (codigo) => {
+    if (r.requiere2fa) setPendiente(congelar(r.usuario))
+    else setUser(congelar(r.usuario))
+  }, [])
+
+  const verificar2fa = useCallback<Ctx['verificar2fa']>(async (codigo) => {
+    if (!pendiente) throw new Error('Inicia sesión de nuevo.')
     await authService.verificar2fa(codigo)
     setUser(pendiente)
     setPendiente(null)
-  }
-  const logout = () => { setUser(null); setPendiente(null) }
+  }, [pendiente])
 
-  return (
-    <AuthCtx.Provider value={{ user, pendiente2fa: !!pendiente, login, verificar2fa, logout }}>
-      {children}
-    </AuthCtx.Provider>
-  )
+  // Cierra la sesión local de inmediato, limpia el historial y pide a la API invalidar la cookie
+  const logout = useCallback(() => {
+    setUser(null)
+    setPendiente(null)
+    void authService.logout()
+    // Reemplaza la entrada actual para que "atrás" no regrese a una pantalla protegida
+    window.history.replaceState(null, '', '/login')
+  }, [])
+
+  const valor = useMemo(() => ({ user, pendiente2fa: !!pendiente, login, verificar2fa, logout }), [user, pendiente, login, verificar2fa, logout])
+  return <AuthCtx.Provider value={valor}>{children}</AuthCtx.Provider>
 }

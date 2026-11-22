@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { rutaInicio, useAuth } from './features/auth/AuthContext'
 import LoginPage from './features/auth/LoginPage'
 import RequireRole from './features/auth/RequireRole'
@@ -6,18 +7,34 @@ import AppShell from './shared/ui/AppShell'
 import ResidenteHome from './features/residente/ResidenteHome'
 import GuardiaHome from './features/guardia/GuardiaHome'
 import AdminHome from './features/admin/AdminHome'
+import PrivacidadPage from './features/legal/PrivacidadPage'
+import TerminosPage from './features/legal/TerminosPage'
+import CookiesPage from './features/legal/CookiesPage'
+import AvisoCookies from './features/legal/AvisoCookies'
 
 export default function App() {
   const { user } = useAuth()
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route element={<AppShell />}>
-        <Route path="/residente" element={<RequireRole rol="RESIDENTE"><ResidenteHome /></RequireRole>} />
-        <Route path="/guardia" element={<RequireRole rol="GUARDIA"><GuardiaHome /></RequireRole>} />
-        <Route path="/admin" element={<RequireRole rol="ADMIN"><AdminHome /></RequireRole>} />
-      </Route>
-      <Route path="*" element={<Navigate to={user ? rutaInicio(user.rol) : '/login'} replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        {/* Documentos legales: públicos, sin sesión */}
+        <Route path="/privacidad" element={<PrivacidadPage />} />
+        <Route path="/terminos" element={<TerminosPage />} />
+        <Route path="/cookies" element={<CookiesPage />} />
+        <Route element={<AppShell />}>
+          <Route path="/residente" element={<RequireRole rol="RESIDENTE"><ResidenteHome /></RequireRole>} />
+          <Route path="/guardia" element={<RequireRole rol="GUARDIA"><GuardiaHome /></RequireRole>} />
+          <Route path="/admin" element={<RequireRole rol="ADMIN"><AdminHome /></RequireRole>} />
+        </Route>
+        <Route path="*" element={<Navigate to={user ? rutaInicio(user.rol) : '/login'} replace />} />
+      </Routes>
+      <AvisoCookies />
+      {/* Notificaciones (Sonner): arriba al centro, lejos del pulgar y del aviso de cookies */}
+      <Toaster position="top-center" richColors closeButton duration={3500}
+        offset={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}
+        mobileOffset={{ top: 'calc(env(safe-area-inset-top) + 8px)' }}
+        toastOptions={{ style: { fontFamily: 'inherit', borderRadius: '16px', fontSize: '0.9375rem' } }} />
+    </>
   )
 }

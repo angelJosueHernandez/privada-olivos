@@ -1,5 +1,7 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Link, Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../../features/auth/AuthContext'
+import { INACTIVIDAD_MIN } from '../../features/auth/permisos'
+import { useInactividad } from '../../features/auth/useInactividad'
 import Icon from './Icon'
 import Marca from './Marca'
 
@@ -10,6 +12,8 @@ const iniciales = (nombre: string) =>
 
 export default function AppShell() {
   const { user, logout } = useAuth()
+  // Cierre automático por inactividad según el rol
+  useInactividad(user ? INACTIVIDAD_MIN[user.rol] : 0, logout, !!user)
   if (!user) return <Navigate to="/login" replace />
   return (
     <div className="min-h-dvh flex flex-col">
@@ -42,6 +46,11 @@ export default function AppShell() {
       <main className="flex-1 w-full max-w-5xl mx-auto px-5 pt-8 sm:pt-12 pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
         <Outlet />
       </main>
+      <footer className="w-full max-w-5xl mx-auto px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] flex flex-wrap gap-x-5 gap-y-2 text-[0.8125rem] text-suave">
+        <Link to="/privacidad" className="hover:text-texto hover:underline underline-offset-4">Aviso de privacidad</Link>
+        <Link to="/terminos" className="hover:text-texto hover:underline underline-offset-4">Términos y condiciones</Link>
+        <Link to="/cookies" className="hover:text-texto hover:underline underline-offset-4">Cookies</Link>
+      </footer>
     </div>
   )
 }

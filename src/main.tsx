@@ -6,6 +6,10 @@ import './index.css'
 import App from './App'
 import { AuthProvider } from './features/auth/AuthContext'
 
+// Si el navegador restaura la página desde su caché al ir "atrás", se recarga:
+// así nunca se muestra una pantalla protegida de una sesión que ya no existe.
+window.addEventListener('pageshow', (e) => { if (e.persisted) window.location.reload() })
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
