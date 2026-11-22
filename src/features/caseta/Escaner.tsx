@@ -18,6 +18,7 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
   const [estado, setEstado] = useState<EstadoCamara>('iniciando')
   const [linterna, setLinterna] = useState<boolean | null>(null) // null = no disponible
   const [manual, setManual] = useState('')
+  const [leidoOk, setLeidoOk] = useState(false)
 
   useEffect(() => {
     let flujo: MediaStream | null = null
@@ -39,7 +40,8 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
         if (qr?.data) {
           activo = false
           navigator.vibrate?.(60) // confirmación táctil en el mismo instante de la lectura
-          leido.current(qr.data)
+          setLeidoOk(true) // el marco se pone verde y aparece la palomita
+          window.setTimeout(() => leido.current(qr.data), 450)
           return
         }
       }
@@ -108,7 +110,14 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
           <div aria-hidden="true" className="absolute inset-[14%] rounded-[22px] shadow-[0_0_0_9999px_rgb(0_0_0/0.45)]">
             {['left-0 top-0 border-l-4 border-t-4 rounded-tl-[22px]', 'right-0 top-0 border-r-4 border-t-4 rounded-tr-[22px]',
               'left-0 bottom-0 border-l-4 border-b-4 rounded-bl-[22px]', 'right-0 bottom-0 border-r-4 border-b-4 rounded-br-[22px]']
-              .map((c) => <span key={c} className={`absolute h-10 w-10 border-white ${c}`} />)}
+              .map((c) => <span key={c} className={`absolute h-10 w-10 transition-[border-color,transform] duration-200 ease-out ${leidoOk ? 'border-[rgb(var(--ok))] scale-[0.92]' : 'border-white'} ${c}`} />)}
+            {leidoOk && (
+              <span className="absolute inset-0 grid place-items-center">
+                <span className="anim-pop anim-trazo grid place-items-center h-20 w-20 rounded-full bg-ok text-white shadow-[0_10px_30px_-8px_rgb(0_0_0/0.5)]">
+                  <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                </span>
+              </span>
+            )}
           </div>
         )}
 
@@ -133,7 +142,7 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
       </div>
 
       {estado === 'activa' && (
-        <p className="mt-5 text-[1.0625rem] font-medium text-white text-center">Apunta al código QR del visitante</p>
+        <p aria-live="polite" className="mt-5 text-[1.0625rem] font-medium text-white text-center">{leidoOk ? 'Código leído' : 'Apunta al código QR del visitante'}</p>
       )}
 
       <form onSubmit={enviarManual} className="mt-8 w-full max-w-[420px]">

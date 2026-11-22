@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { hayApi } from '../../shared/api/cliente'
 import Escaner from '../caseta/Escaner'
 import LogoEmpresa, { tieneInsignia } from '../caseta/LogoEmpresa'
+import { BotonCampana, PanelNotificaciones, useNotificaciones } from '../caseta/Notificaciones'
 import RegistroManual from '../caseta/RegistroManual'
-import ResultadoPase from '../caseta/ResultadoPase'
+import ResultadoPase, { verificacionesDe } from '../caseta/ResultadoPase'
 import { casetaService } from '../caseta/casetaService'
 import { Acceso, ETIQUETA_TIPO, NuevoAcceso, TipoAcceso, Validacion } from '../caseta/tipos'
 
@@ -16,6 +16,8 @@ type Vista =
   | { modo: 'validando' }
   | { modo: 'resultado'; validacion: Validacion }
   | { modo: 'manual' }
+  | { modo: 'registrado'; titulo: string; detalle: string; logo?: string }
+  | { modo: 'notificaciones' }
   | null
 type Filtro = 'dentro' | 'caseta' | 'todos'
 
@@ -29,7 +31,7 @@ const LIMITE_ESTANCIA_MS = 2 * 60 * 60_000 // aviso a las 2 horas dentro
 const estaDentro = (a: Acceso) => !a.salida && a.paquete !== 'CASETA'
 const enCaseta = (a: Acceso) => a.paquete === 'CASETA' && !a.entregado
 const tiempoDentro = (a: Acceso, ahora: Date) => ahora.getTime() - a.entrada.getTime()
-const duracion = (ms: number) => { const m = Math.floor(ms / 60_000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min` }
+const duracion = (ms: number) => { const m = Math.max(0, Math.floor(ms / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min` }
 
 export default function GuardiaHome() {
   const [vista, setVista] = useState<Vista>(null)
@@ -38,33 +40,39 @@ export default function GuardiaHome() {
   const [filtro, setFiltro] = useState<Filtro>('dentro')
   const [enviando, setEnviando] = useState(false)
   const [nuevoId, setNuevoId] = useState<string | null>(null)
+  const [verificado, setVerificado] = useState<Record<string, boolean>>({})
   const [ahora, setAhora] = useState(() => new Date())
   const avisados = useRef(new Set<string>())
+  const { eventos, sinLeer, notificar, marcarLeidas } = useNotificaciones()
 
   const recargar = useCallback(async () => {
     try { setAccesos(await casetaService.listarHoy()) }
-    catch { toast.error('No se pudo cargar la bitácora', { description: 'Revisa la conexión.' }) }
+    catch { notificar('error', 'No se pudo cargar la bitácora', 'Revisa la conexión.') }
     finally { setCargandoLista(false) }
-  }, [])
+  }, [notificar])
   useEffect(() => { recargar() }, [recargar])
   useEffect(() => { const t = setInterval(() => setAhora(new Date()), 30_000); return () => clearInterval(t) }, [])
 
-  // Automatización: avisa una sola vez por persona cuando pasa del tiempo límite dentro
+  // Automatización: avisa una sola vez por registro cuando pasa del tiempo límite dentro
   useEffect(() => {
     const largos = accesos.filter((a) => estaDentro(a) && tiempoDentro(a, ahora) > LIMITE_ESTANCIA_MS && !avisados.current.has(a.id))
-    if (!largos.length) return
-    largos.forEach((a) => avisados.current.add(a.id))
-    toast.warning(largos.length === 1 ? `${largos[0].nombre} lleva más de 2 horas dentro` : `${largos.length} registros llevan más de 2 horas dentro`, {
-      description: largos.length === 1 ? `${largos[0].casa} · entró ${horaCorta(largos[0].entrada)}` : 'Revisa la pestaña "Dentro ahora".',
-      duration: 6000,
+    largos.forEach((a) => {
+      avisados.current.add(a.id)
+      notificar('alerta', `${a.nombre} lleva más de 2 horas dentro`, `${a.casa} · entró ${horaCorta(a.entrada)}`)
     })
-  }, [accesos, ahora])
+  }, [accesos, ahora, notificar])
 
   const cerrar = () => setVista(null)
   const marcarNuevo = (id: string) => { setNuevoId(id); setTimeout(() => setNuevoId((x) => (x === id ? null : x)), 2200) }
+  // Confirmación animada que se cierra sola
+  const confirmar = (titulo: string, detalle: string, logo?: string) => {
+    setVista({ modo: 'registrado', titulo, detalle, logo })
+    setTimeout(() => setVista((v) => (v?.modo === 'registrado' ? null : v)), 1700)
+  }
 
   const alLeer = async (contenido: string) => {
     setVista({ modo: 'validando' })
+    setVerificado({})
     try {
       const validacion = await casetaService.validarPase(contenido)
       // Vibración distinta para que el guardia sepa el resultado sin mirar
@@ -80,44 +88,44 @@ export default function GuardiaHome() {
     setEnviando(true)
     try {
       const a = await casetaService.registrarEntradaConPase(v.pase)
-      toast.success('Entrada registrada', { description: `${a.nombre} → ${a.casa}` })
-      setFiltro('dentro'); cerrar(); marcarNuevo(a.id); recargar()
-    } catch { toast.error('No se pudo registrar la entrada', { description: 'Intenta de nuevo.' }) }
+      notificar('entrada', 'Entrada registrada', `${a.nombre} → ${a.casa}`)
+      setFiltro('dentro'); marcarNuevo(a.id); recargar()
+      confirmar('Entrada registrada', `${a.nombre} → ${a.casa} · ${horaCorta(a.entrada)}`)
+    } catch { notificar('error', 'No se pudo registrar la entrada', 'Intenta de nuevo.') }
     finally { setEnviando(false) }
   }
 
-  const registrarManual = async (datos: NuevoAcceso, fotos: Blob[]) => {
+  const registrarManual = async (datos: NuevoAcceso, fotos: { blob: Blob; etiqueta: string }[]) => {
     setEnviando(true)
     try {
       const a = await casetaService.registrarManual(datos, fotos)
-      toast.success(`${ETIQUETA_TIPO[a.tipo]} registrada`, {
-        description: `${a.nombre} → ${a.casa}${fotos.length ? ` · ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}`,
-      })
+      notificar('entrada', `${ETIQUETA_TIPO[a.tipo]} registrada`,
+        `${a.nombre} → ${a.casa}${fotos.length ? ` · ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}`)
       // Automatización: si el paquete se queda en caseta, se avisa a la casa
       if (a.paquete === 'CASETA') {
-        setTimeout(() => toast.info(`Aviso enviado a ${a.casa}`, {
-          description: hayApi ? 'Su paquete está en caseta.' : 'Su paquete está en caseta. (En modo demostración no se envía realmente).',
-        }), 700)
+        setTimeout(() => notificar('paquete', `Aviso enviado a ${a.casa}`,
+          hayApi ? 'Su paquete está en caseta.' : 'Su paquete está en caseta. (En modo demostración no se envía realmente).'), 900)
       }
-      setFiltro(a.paquete === 'CASETA' ? 'caseta' : 'dentro'); cerrar(); marcarNuevo(a.id); recargar()
-    } catch { toast.error('No se pudo guardar el registro', { description: 'Intenta de nuevo.' }) }
+      setFiltro(a.paquete === 'CASETA' ? 'caseta' : 'dentro'); marcarNuevo(a.id); recargar()
+      confirmar(a.paquete === 'CASETA' ? 'Paquete en caseta' : 'Entrada registrada', `${a.nombre} → ${a.casa}`, a.nombre)
+    } catch { notificar('error', 'No se pudo guardar el registro', 'Intenta de nuevo.') }
     finally { setEnviando(false) }
   }
 
   const registrarSalida = async (a: Acceso) => {
     try {
       await casetaService.registrarSalida(a.id)
-      toast.success('Salida registrada', { description: `${a.nombre} · estuvo ${duracion(Date.now() - a.entrada.getTime())}` })
+      notificar('salida', `Salida · ${a.nombre}`, `${a.casa} · estuvo ${duracion(Date.now() - a.entrada.getTime())}`)
       recargar()
-    } catch { toast.error('No se pudo registrar la salida') }
+    } catch { notificar('error', 'No se pudo registrar la salida') }
   }
 
   const entregar = async (a: Acceso) => {
     try {
       await casetaService.entregarPaquete(a.id)
-      toast.success('Paquete entregado', { description: `${a.nombre} → ${a.casa}` })
+      notificar('entrega', 'Paquete entregado', `${a.nombre} → ${a.casa}`)
       recargar()
-    } catch { toast.error('No se pudo marcar la entrega') }
+    } catch { notificar('error', 'No se pudo marcar la entrega') }
   }
 
   const dentro = accesos.filter(estaDentro)
@@ -126,10 +134,15 @@ export default function GuardiaHome() {
   const pestanas: [Filtro, string, number][] = [['dentro', 'Dentro', dentro.length], ['caseta', 'En caseta', caseta.length], ['todos', 'Todos', accesos.length]]
   const vacio = { dentro: ['No hay nadie dentro', 'Las entradas que registres aparecerán aquí.'], caseta: ['Sin paquetes en caseta', 'Los paquetes que se queden aquí aparecerán para entregarlos.'], todos: ['Sin registros hoy', 'Las entradas que registres aparecerán aquí.'] }[filtro]
 
+  const pase = vista?.modo === 'resultado' ? vista.validacion.pase : undefined
+  const faltan = pase && vista?.modo === 'resultado' && vista.validacion.estado === 'VALIDO'
+    ? verificacionesDe(pase).filter((v) => !verificado[v.id]).length : 0
+
   return (
     <>
       <Encabezado titulo="Caseta principal"
-        detalle={ahora.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + horaCorta(ahora)} />
+        detalle={ahora.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + horaCorta(ahora)}
+        accion={<BotonCampana sinLeer={sinLeer} onAbrir={() => { setVista({ modo: 'notificaciones' }); marcarLeidas() }} />} />
 
       {/* Acciones principales: grandes para usarse rápido, con guantes o a pleno sol */}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -162,7 +175,7 @@ export default function GuardiaHome() {
               <button key={v} role="tab" aria-selected={filtro === v} onClick={() => setFiltro(v)}
                 className={`h-9 px-3 rounded-[9px] text-[0.875rem] font-medium whitespace-nowrap transition-[background-color,color,box-shadow] duration-150
                   ${filtro === v ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>
-                {t} <span className={`cifras ${v === 'caseta' && n > 0 ? 'text-alerta font-semibold' : ''}`}>{n}</span>
+                {t} <span key={n} className={`inline-block cifras ${n > 0 ? 'anim-llenar' : ''} ${v === 'caseta' && n > 0 ? 'text-alerta font-semibold' : ''}`}>{n}</span>
               </button>
             ))}
           </div>
@@ -232,9 +245,12 @@ export default function GuardiaHome() {
           pie={vista.modo === 'resultado' && (
             <div className="space-y-2.5">
               {vista.validacion.estado === 'VALIDO' ? (
-                <button onClick={() => registrarConPase(vista.validacion)} disabled={enviando} className="btn-primario w-full">
-                  <Icon n="entrada" size={20} />{enviando ? 'Registrando…' : 'Registrar entrada'}
-                </button>
+                <>
+                  {faltan > 0 && <p className="text-center text-[0.875rem] text-suave">Confirma {faltan === 1 ? 'el dato pendiente' : `los ${faltan} datos`} para registrar la entrada</p>}
+                  <button onClick={() => registrarConPase(vista.validacion)} disabled={enviando || faltan > 0} className="btn-primario w-full">
+                    <Icon n="entrada" size={20} />{enviando ? 'Registrando…' : 'Registrar entrada'}
+                  </button>
+                </>
               ) : (
                 <button onClick={() => setVista({ modo: 'manual' })} className="btn-primario w-full">Registrar sin código</button>
               )}
@@ -247,7 +263,8 @@ export default function GuardiaHome() {
               Validando pase…
             </div>
           ) : (
-            <ResultadoPase validacion={vista.validacion} />
+            <ResultadoPase validacion={vista.validacion} verificado={verificado}
+              onVerificar={(id) => setVerificado((v) => ({ ...v, [id]: !v[id] }))} />
           )}
         </Hoja>
       )}
@@ -262,6 +279,23 @@ export default function GuardiaHome() {
           <RegistroManual idFormulario={FORM_MANUAL} onEnviar={registrarManual} />
         </Hoja>
       )}
+
+      {/* Confirmación animada: se cierra sola */}
+      {vista?.modo === 'registrado' && (
+        <Hoja titulo="Listo" onCerrar={cerrar}>
+          <div role="status" className="flex min-h-[60svh] flex-col items-center justify-center text-center">
+            <span className="anim-pop anim-trazo grid place-items-center h-24 w-24 rounded-full bg-ok text-white shadow-[0_14px_32px_-12px_rgb(0_0_0/0.35)]">
+              <Icon n="check" size={50} stroke={2.6} />
+            </span>
+            <p className="anim-llenar mt-6 text-[1.75rem] font-bold tracking-[-0.02em]" style={{ animationDelay: '200ms' }}>{vista.titulo}</p>
+            <p className="anim-llenar mt-2 flex items-center gap-2 text-[1.0625rem] text-suave" style={{ animationDelay: '260ms' }}>
+              {vista.logo && <LogoEmpresa nombre={vista.logo} size={24} />}{vista.detalle}
+            </p>
+          </div>
+        </Hoja>
+      )}
+
+      {vista?.modo === 'notificaciones' && <PanelNotificaciones eventos={eventos} onCerrar={cerrar} />}
     </>
   )
 }

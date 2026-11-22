@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
+import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { Opciones, OpcionesMultiples } from '../../shared/ui/Opciones'
@@ -6,7 +6,7 @@ import LectorPlaca from './LectorPlaca'
 import LogoEmpresa from './LogoEmpresa'
 import SelectorCasa from './SelectorCasa'
 import { casetaService } from './casetaService'
-import { prepararFoto } from './fotos'
+import FotosGuiadas, { FotoEvidencia } from './FotosGuiadas'
 import {
   Acceso, Color, COLORES, EMPRESAS, ETIQUETAS, LecturaPlaca, NuevoAcceso, tienePlaca, Vehiculo, VEHICULOS,
 } from './tipos'
@@ -20,10 +20,8 @@ const TIPOS: { valor: NuevoAcceso['tipo']; etiqueta: string; icono: IconName }[]
 const VEHICULO_POR_IA: Record<LecturaPlaca['tipoVehiculo'], Vehiculo | undefined> = {
   AUTO: 'AUTO', CAMIONETA: 'CAMIONETA', MOTO: 'MOTO', CAMION: 'CAMION', DESCONOCIDO: undefined,
 }
-const MAX_FOTOS = 4
 const OTRA = 'Otra'
 
-type Foto = { blob: Blob; url: string; deIa?: boolean }
 
 function Paso({ n, titulo, extra, children }: { n: number; titulo: string; extra?: ReactNode; children: ReactNode }) {
   return (
@@ -39,7 +37,7 @@ function Paso({ n, titulo, extra, children }: { n: number; titulo: string; extra
 
 export default function RegistroManual({ idFormulario, onEnviar }: {
   idFormulario: string
-  onEnviar: (datos: NuevoAcceso, fotos: Blob[]) => void
+  onEnviar: (datos: NuevoAcceso, fotos: { blob: Blob; etiqueta: string }[]) => void
 }) {
   const [tipo, setTipo] = useState<NuevoAcceso['tipo']>('PAQUETERIA')
   const [empresa, setEmpresa] = useState<string | null>(null)
@@ -54,8 +52,7 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
   const [etiquetas, setEtiquetas] = useState<string[]>([])
   const [conNota, setConNota] = useState(false)
   const [nota, setNota] = useState('')
-  const [fotos, setFotos] = useState<Foto[]>([])
-  const [procesando, setProcesando] = useState(false)
+  const [fotos, setFotos] = useState<FotoEvidencia[]>([])
   const [sugerencia, setSugerencia] = useState<Acceso | null>(null)
   const [error, setError] = useState('')
   const fotosRef = useRef(fotos)
@@ -68,7 +65,8 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
   // ---- IA de placas + automatización por historial ----
   const alLeerPlaca = async (lectura: LecturaPlaca, foto: Blob) => {
     const url = URL.createObjectURL(foto)
-    setFotos((f) => [{ blob: foto, url, deIa: true }, ...f.filter((x) => !x.deIa)].slice(0, MAX_FOTOS))
+    // La foto de la placa ocupa su lugar en las fotos guiadas
+    setFotos((f) => { f.filter((x) => x.slot === 'placa').forEach((x) => URL.revokeObjectURL(x.url)); return [{ blob: foto, url, slot: 'placa' }, ...f.filter((x) => x.slot !== 'placa')] })
     const v = VEHICULO_POR_IA[lectura.tipoVehiculo]
     if (v) setVehiculo(v)
     if (lectura.color !== 'OTRO' || !color) setColor(lectura.color)
@@ -91,22 +89,6 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
     toast.success('Datos completados con la visita anterior')
   }
 
-  // ---- Fotos extra de evidencia ----
-  const agregarFotos = async (e: ChangeEvent<HTMLInputElement>) => {
-    const archivos = Array.from(e.target.files ?? []).slice(0, MAX_FOTOS - fotos.length)
-    e.target.value = ''
-    if (!archivos.length) return
-    setProcesando(true)
-    try {
-      const nuevas: Foto[] = []
-      for (const a of archivos) { const blob = await prepararFoto(a); nuevas.push({ blob, url: URL.createObjectURL(blob) }) }
-      setFotos((f) => [...f, ...nuevas])
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'No se pudo agregar la foto.')
-    } finally { setProcesando(false) }
-  }
-  const quitarFoto = (i: number) => setFotos((f) => { URL.revokeObjectURL(f[i].url); return f.filter((_, j) => j !== i) })
-
   const enviar = (e: FormEvent) => {
     e.preventDefault()
     const esVisita = tipo === 'VISITA_SIN_QR'
@@ -127,7 +109,7 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
       nota: conNota && nota.trim() ? nota.trim() : undefined,
       paquete: tipo === 'PAQUETERIA' ? paquete : undefined,
       cantidad: tipo === 'PAQUETERIA' ? cantidad : undefined,
-    }, fotos.map((f) => f.blob))
+    }, fotos.map((f) => ({ blob: f.blob, etiqueta: f.slot.startsWith('extra-') ? 'adicional' : f.slot })))
   }
 
   const empresas = EMPRESAS[tipo]
@@ -165,7 +147,7 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
       </Paso>
 
       <Paso n={3} titulo="¿Cómo llegó?">
-        <Opciones etiqueta="Vehículo" valor={vehiculo} onCambio={setVehiculo} cuadricula="grid grid-cols-3 sm:grid-cols-6 gap-2"
+        <Opciones etiqueta="Vehículo" valor={vehiculo} onCambio={(v) => setVehiculo(v ?? undefined)} cuadricula="grid grid-cols-3 sm:grid-cols-6 gap-2"
           opciones={VEHICULOS.map((v) => ({ valor: v.valor, etiqueta: v.etiqueta }))} />
         {tienePlaca(vehiculo) && (
           <div className="anim-llenar mt-5 space-y-5">
@@ -185,7 +167,7 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
 
             <div>
               <p className="mb-2 text-[0.875rem] text-suave">Color</p>
-              <Opciones etiqueta="Color" valor={color} onCambio={setColor}
+              <Opciones etiqueta="Color" valor={color} onCambio={(v) => setColor(v ?? undefined)}
                 opciones={COLORES.map((c) => ({
                   valor: c.valor, etiqueta: c.etiqueta,
                   extra: <span aria-hidden="true" className="h-4 w-4 rounded-full ring-1 ring-inset ring-black/15" style={{ background: c.muestra }} />,
@@ -202,9 +184,9 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
       {tipo === 'PAQUETERIA' && (
         <Paso n={5} titulo="Entrega">
           <div className="space-y-3">
-            <Opciones etiqueta="Dónde se entrega" valor={paquete} onCambio={setPaquete} cuadricula="grid grid-cols-2 gap-2"
+            <Opciones etiqueta="Dónde se entrega" valor={paquete} onCambio={(v) => v && setPaquete(v)} opcional={false} cuadricula="grid grid-cols-2 gap-2"
               opciones={[{ valor: 'CASA', etiqueta: 'En la casa' }, { valor: 'CASETA', etiqueta: 'En caseta' }]} />
-            <Opciones etiqueta="Cantidad de paquetes" valor={cantidad} onCambio={setCantidad}
+            <Opciones etiqueta="Cantidad de paquetes" valor={cantidad} onCambio={(v) => v && setCantidad(v)} opcional={false}
               opciones={[{ valor: '1', etiqueta: '1 paquete' }, { valor: '2', etiqueta: '2 paquetes' }, { valor: '3+', etiqueta: '3 o más' }]} />
           </div>
         </Paso>
@@ -223,33 +205,8 @@ export default function RegistroManual({ idFormulario, onEnviar }: {
         </div>
       </Paso>
 
-      <Paso n={7} titulo="Fotos de evidencia" extra={<span className="text-[0.8125rem] text-suave cifras">{fotos.length}/{MAX_FOTOS}</span>}>
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-          {fotos.map((f, i) => (
-            <div key={f.url} className="anim-llenar relative aspect-square overflow-hidden rounded-[16px] bg-panel ring-1 ring-inset ring-borde">
-              <img src={f.url} alt={f.deIa ? 'Foto de la placa' : `Evidencia ${i + 1}`} className="h-full w-full object-cover" />
-              {f.deIa && <span className="absolute left-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[0.6875rem] font-semibold text-white backdrop-blur-md">Placa</span>}
-              <button type="button" onClick={() => quitarFoto(i)} aria-label={`Quitar foto ${i + 1}`}
-                className="absolute right-1.5 top-1.5 h-9 w-9 grid place-items-center rounded-full bg-black/55 text-white backdrop-blur-md active:scale-95 transition-transform">
-                <Icon n="basura" size={17} />
-              </button>
-            </div>
-          ))}
-          {fotos.length < MAX_FOTOS && (
-            <label className={`relative aspect-square flex flex-col items-center justify-center gap-1.5 rounded-[16px] cursor-pointer
-              bg-acento/[0.06] text-acento ring-1 ring-inset ring-acento/30 text-[0.875rem] font-semibold
-              transition-transform duration-150 active:scale-[0.97]
-              focus-within:outline focus-within:outline-[3px] focus-within:outline-acento/55 ${procesando ? 'opacity-60' : ''}`}>
-              <input type="file" accept="image/*" capture="environment" multiple onChange={agregarFotos} disabled={procesando} className="sr-only" />
-              <Icon n="camara" size={26} />
-              {procesando ? 'Procesando…' : 'Agregar foto'}
-            </label>
-          )}
-        </div>
-        <p className="mt-2 text-[0.8125rem] leading-[1.45] text-suave">
-          Fotografía solo placas, paquetes o gafetes; no rostros ni identificaciones completas. Las fotos se reducen,
-          se les quita la ubicación y se borran a los 90 días. Indica a la persona que el aviso de privacidad está en caseta.
-        </p>
+      <Paso n={7} titulo="Fotos de evidencia">
+        <FotosGuiadas tipo={tipo} vehiculo={vehiculo} fotos={fotos} onCambio={setFotos} />
       </Paso>
 
       {error && (

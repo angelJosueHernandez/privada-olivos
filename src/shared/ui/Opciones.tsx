@@ -11,18 +11,23 @@ const encendido = 'bg-acento text-acento-texto ring-1 ring-inset ring-acento sha
 
 type Opcion<T extends string> = { valor: T; etiqueta: ReactNode; extra?: ReactNode }
 
-export function Opciones<T extends string>({ etiqueta, opciones, valor, onCambio, cuadricula }: {
+export function Opciones<T extends string>({ etiqueta, opciones, valor, onCambio, cuadricula, opcional = true }: {
   etiqueta: string
   opciones: Opcion<T>[]
   valor: T | null | undefined
-  onCambio: (v: T) => void
+  /** Recibe null cuando se quita la opción elegida (solo si es opcional) */
+  onCambio: (v: T | null) => void
+  /** true: tocar otra vez la opción elegida la quita */
+  opcional?: boolean
   /** Clases de cuadrícula opcionales; por defecto los chips fluyen en renglones */
   cuadricula?: string
 }) {
   return (
     <div role="group" aria-label={etiqueta} className={cuadricula ?? 'flex flex-wrap gap-2'}>
       {opciones.map((o) => (
-        <button key={o.valor} type="button" aria-pressed={valor === o.valor} onClick={() => onCambio(o.valor)}
+        <button key={o.valor} type="button" aria-pressed={valor === o.valor}
+          onClick={() => onCambio(opcional && valor === o.valor ? null : o.valor)}
+          title={opcional && valor === o.valor ? 'Toca de nuevo para quitar' : undefined}
           className={`${base} ${valor === o.valor ? encendido : apagado}`}>
           {o.extra}{o.etiqueta}
         </button>

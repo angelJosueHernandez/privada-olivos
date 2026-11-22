@@ -76,11 +76,13 @@ export const casetaService = {
     return acceso
   },
 
-  async registrarManual(datos: NuevoAcceso, fotos: Blob[]): Promise<Acceso> {
+  async registrarManual(datos: NuevoAcceso, evidencias: { blob: Blob; etiqueta: string }[]): Promise<Acceso> {
+    const fotos = evidencias.map((e) => e.blob)
     if (hayApi) {
       const form = new FormData()
       form.append('datos', new Blob([JSON.stringify(datos)], { type: 'application/json' }))
-      fotos.forEach((f, i) => form.append('fotos', f, `evidencia-${i + 1}.jpg`))
+      // El nombre del archivo indica qué es (placa, guia, paquete…); la API lo renombra con un UUID al guardarlo
+      evidencias.forEach((e, i) => form.append('fotos', e.blob, `${e.etiqueta.replace(/[^a-z]/g, '') || 'foto'}-${i + 1}.jpg`))
       return api<Acceso>('/api/caseta/accesos', { metodo: 'POST', cuerpo: form })
     }
     await espera(600)
