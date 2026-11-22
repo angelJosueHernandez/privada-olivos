@@ -5,6 +5,9 @@ import { useAuth } from '../auth/AuthContext'
 import { INACTIVIDAD_MIN, rutaInicio } from '../auth/permisos'
 import { casetaService } from '../caseta/casetaService'
 import { ETIQUETA_ROL } from '../caseta/tipos'
+import { toast } from 'sonner'
+import { useEstadoAvisos } from '../../shared/avisos/sistema'
+import { useInstalar } from '../../shared/avisos/instalar'
 
 const iniciales = (n: string) => n.split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase()
 
@@ -23,6 +26,30 @@ function Fila({ icono, etiqueta, children }: { icono: IconName; etiqueta: string
       <dt className="flex-1 text-[0.9375rem]">{etiqueta}</dt>
       <dd className="text-[0.9375rem] font-medium text-right text-texto/80 min-w-0 truncate">{children}</dd>
     </div>
+  )
+}
+
+/* Notificaciones e instalación en ESTE celular o computadora */
+function Dispositivo() {
+  const { estado, activar } = useEstadoAvisos()
+  const { modo, instalar } = useInstalar()
+  const accion = 'inline-flex items-center h-9 px-3.5 rounded-full bg-acento text-acento-texto text-[0.875rem] font-semibold active:scale-[0.96] transition-transform'
+  return (
+    <Grupo titulo="Este dispositivo" retraso={150}>
+      <Fila icono="avisos" etiqueta="Notificaciones">
+        {estado === 'activos' ? <span className="inline-flex items-center gap-1.5 text-ok"><Icon n="check" size={15} stroke={3} />Activas</span>
+          : estado === 'pendiente' ? <button type="button" className={accion} onClick={async () => { if ((await activar()) === 'activos') toast.success('Notificaciones activadas') }}>Activar</button>
+          : estado === 'bloqueados' ? <span className="text-peligro">Bloqueadas</span>
+          : estado === 'instalar' ? <span className="text-suave">Instala la app primero</span>
+          : <span className="text-suave">No disponibles</span>}
+      </Fila>
+      <Fila icono="descargar" etiqueta="App">
+        {modo === 'instalada' ? <span className="inline-flex items-center gap-1.5 text-ok"><Icon n="check" size={15} stroke={3} />Instalada</span>
+          : modo === 'boton' ? <button type="button" className={accion} onClick={async () => { if (await instalar()) toast.success('App instalada') }}>Instalar</button>
+          : modo === 'ios' ? <span className="text-suave text-[0.875rem]">Compartir → Agregar a inicio</span>
+          : <span className="text-suave text-[0.875rem]">Menú ⋮ → Instalar</span>}
+      </Fila>
+    </Grupo>
   )
 }
 
@@ -74,6 +101,8 @@ export default function PerfilPage() {
           </Fila>
           <Fila icono="salir" etiqueta="Cierre por inactividad">{INACTIVIDAD_MIN[user.rol]} min</Fila>
         </Grupo>
+
+        <Dispositivo />
 
         {user.rol === 'GUARDIA' && (
           <Grupo titulo="Mi actividad de hoy" retraso={180}>

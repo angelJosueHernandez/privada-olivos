@@ -13,7 +13,7 @@ self.addEventListener('push', (evento) => {
     body: typeof datos.cuerpo === 'string' ? datos.cuerpo.slice(0, 300) : undefined,
     tag: typeof datos.etiqueta === 'string' ? datos.etiqueta : undefined,
     icon: '/icono-192.png',
-    badge: '/icono-192.png',
+    badge: '/badge-96.png',
     data: { url },
     lang: 'es-MX',
   }))

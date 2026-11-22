@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import Icon from '../ui/Icon'
 import { avisoSistema, useEstadoAvisos } from './sistema'
+import { useInstalar } from './instalar'
 
 const OCULTA = 'olv-avisos-ahora-no'
 const leerOculta = () => { try { return sessionStorage.getItem(OCULTA) === '1' } catch { return false } }
@@ -11,6 +12,7 @@ export default function TarjetaAvisos({ texto }: { texto: string }) {
   const { estado, activar } = useEstadoAvisos()
   const [oculta, setOculta] = useState(leerOculta)
   const [pidiendo, setPidiendo] = useState(false)
+  const { modo, instalar } = useInstalar()
 
   if (oculta || estado === 'activos' || estado === 'no-soportado') return null
 
@@ -54,6 +56,10 @@ export default function TarjetaAvisos({ texto }: { texto: string }) {
           <button type="button" onClick={alActivar} disabled={pidiendo} className="btn-primario btn-chico">
             <Icon n="avisos" size={17} />{pidiendo ? 'Activando…' : 'Activar'}
           </button>
+        )}
+        {/* Android y computadora: instalarla deja la app con su ícono, a pantalla completa */}
+        {modo === 'boton' && (
+          <button type="button" onClick={() => void instalar()} className="btn-secundario btn-chico"><Icon n="descargar" size={17} />Instalar app</button>
         )}
         <button type="button" onClick={ahoraNo} className="btn-secundario btn-chico">Ahora no</button>
       </div>

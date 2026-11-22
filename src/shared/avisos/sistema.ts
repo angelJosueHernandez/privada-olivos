@@ -38,7 +38,7 @@ export async function activarAvisos(): Promise<EstadoAvisos> {
 export async function avisoSistema(titulo: string, { cuerpo, etiqueta, url = '/' }: { cuerpo?: string; etiqueta?: string; url?: string } = {}): Promise<boolean> {
   if (!('Notification' in window) || Notification.permission !== 'granted') return false
   const opciones: NotificationOptions & { renotify?: boolean; vibrate?: number[] } = {
-    body: cuerpo, tag: etiqueta, renotify: !!etiqueta, icon: '/icono-192.png', badge: '/icono-192.png',
+    body: cuerpo, tag: etiqueta, renotify: !!etiqueta, icon: '/icono-192.png', badge: '/badge-96.png',
     data: { url }, vibrate: [60, 40, 60], lang: 'es-MX',
   }
   try {
