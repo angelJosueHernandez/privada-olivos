@@ -8,7 +8,7 @@ import { avisoSistema } from '../../shared/avisos/sistema'
   Centro de notificaciones del turno: cada evento se muestra como aviso emergente (Sonner) y queda
   guardado en la campana para revisarlo después. Con la API, aquí llegarán también los avisos del servidor.
 */
-export type TipoEvento = 'entrada' | 'salida' | 'paquete' | 'entrega' | 'alerta' | 'error' | 'pase'
+export type TipoEvento = 'entrada' | 'salida' | 'paquete' | 'entrega' | 'alerta' | 'error' | 'pase' | 'anuncio' | 'pago'
 export type Evento = { id: string; tipo: TipoEvento; titulo: string; detalle?: string; hora: Date; leido: boolean }
 
 const ESTILO: Record<TipoEvento, { icono: IconName; clase: string }> = {
@@ -19,6 +19,8 @@ const ESTILO: Record<TipoEvento, { icono: IconName; clase: string }> = {
   alerta: { icono: 'reloj', clase: 'bg-peligro/[0.1] text-peligro' },
   error: { icono: 'alerta', clase: 'bg-peligro/[0.1] text-peligro' },
   pase: { icono: 'qr', clase: 'bg-acento/[0.1] text-acento' },
+  anuncio: { icono: 'megafono', clase: 'bg-acento/[0.1] text-acento' },
+  pago: { icono: 'pagos', clase: 'bg-ok/[0.12] text-ok' },
 }
 
 export function useNotificaciones() {

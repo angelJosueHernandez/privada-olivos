@@ -158,10 +158,10 @@ export type NuevoPase = {
  * Aviso para una casa (o para la caseta): "tu visita llegó", "tu paquete va en camino"…
  * Con la API los genera el servidor al registrar el evento y los manda como notificación push.
  */
-export type TipoAviso = 'llegada' | 'camino' | 'paquete' | 'entrega' | 'salida' | 'pase'
+export type TipoAviso = 'llegada' | 'camino' | 'paquete' | 'entrega' | 'salida' | 'pase' | 'anuncio' | 'pago'
 export type Aviso = {
   id: string
-  /** Casa destinataria, o 'CASETA' para avisos a los guardias */
+  /** Casa destinataria, 'CASETA' (guardias), 'ADMIN' (administración) o 'TODAS' (todas las casas) */
   para: string
   tipo: TipoAviso
   titulo: string

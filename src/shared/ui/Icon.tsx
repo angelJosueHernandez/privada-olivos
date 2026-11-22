@@ -16,6 +16,8 @@ const D = {
   compartir: 'M12 3v12 M8 7l4-4 4 4 M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7',
   copiar: 'M9 9h11v11H9z M5 15H4V4h11v1',
   descargar: 'M12 4v12 M8 12l4 4 4-4 M5 20h14',
+  megafono: 'M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1z M16.5 9a4 4 0 0 1 0 6 M19 6a8 8 0 0 1 0 12',
+  imagen: 'M4 5h16v14H4z M4 16l5-5 4 4 3-3 4 4 M15 9h.01',
   calendario: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4',
   alerta: 'M12 8v5 M12 16.5h.01 M10.3 3.9L2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
   usuario: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21a8 8 0 0 1 16 0',

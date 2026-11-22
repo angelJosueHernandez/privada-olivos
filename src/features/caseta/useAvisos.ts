@@ -12,7 +12,8 @@ const leerMarca = (para: string) => { try { return Number(localStorage.getItem(c
   Cada aviso NUEVO se muestra dentro de la app (Sonner) y como notificación del sistema si hay permiso.
   Los avisos que ya existían al abrir la app no se vuelven a notificar.
 */
-export function useAvisos(para: string | undefined, url: string, alNuevo?: (v: Aviso) => void) {
+/** alNuevo: false = solo lista (otro componente ya notifica); función = manejo propio; sin valor = toast + sistema */
+export function useAvisos(para: string | undefined, url: string, alNuevo?: ((v: Aviso) => void) | false) {
   const [avisos, setAvisos] = useState<Aviso[]>([])
   const [leidoHasta, setLeidoHasta] = useState(() => (para ? leerMarca(para) : 0))
   const conocidos = useRef<Set<string> | null>(null)
@@ -28,6 +29,7 @@ export function useAvisos(para: string | undefined, url: string, alNuevo?: (v: A
     const nuevos = lista.filter((v) => !conocidos.current!.has(v.id)).reverse()
     nuevos.forEach((v) => {
       conocidos.current!.add(v.id)
+      if (alNuevoRef.current === false) return
       if (alNuevoRef.current) { alNuevoRef.current(v); return }
       const estilo = v.tipo === 'paquete' ? toast.info : v.tipo === 'salida' ? toast.message : toast.success
       estilo(v.titulo, { description: v.cuerpo, duration: 6000 })

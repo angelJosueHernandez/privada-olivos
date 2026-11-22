@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../auth/AuthContext'
 import Encabezado from '../../shared/ui/Encabezado'
@@ -13,6 +14,9 @@ import { BotonCampana, Evento, PanelNotificaciones, TipoEvento } from '../caseta
 import { Acceso, Actor, Aviso, ETIQUETA_TIPO, NuevoPase, PaseResidente, TipoAcceso, TipoAviso } from '../caseta/tipos'
 import { useAvisos } from '../caseta/useAvisos'
 import CrearPase from './CrearPase'
+import { comunidadService } from '../comunidad/comunidadService'
+import { leerVisto } from '../comunidad/ListaAnuncios'
+import { Anuncio, Cuota, pesos } from '../comunidad/tipos'
 import PaseQR, { ESTADO_PASE } from './PaseQR'
 
 type Vista =
@@ -24,7 +28,7 @@ type Vista =
 
 const FORM_PASE = 'crear-pase'
 const ICONO_TIPO: Record<TipoAcceso, IconName> = { VISITA_QR: 'qr', PAQUETERIA: 'paquete', COMIDA: 'comida', SERVICIO: 'herramienta', VISITA_SIN_QR: 'visita' }
-const EVENTO_DE: Record<TipoAviso, TipoEvento> = { llegada: 'entrada', camino: 'entrada', paquete: 'paquete', entrega: 'entrega', salida: 'salida', pase: 'pase' }
+const EVENTO_DE: Record<TipoAviso, TipoEvento> = { llegada: 'entrada', camino: 'entrada', paquete: 'paquete', entrega: 'entrega', salida: 'salida', pase: 'pase', anuncio: 'anuncio', pago: 'pago' }
 const hora = (d: Date) => d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
 
 function estadoAcceso(a: Acceso): { texto: string; clase: string } {
@@ -53,7 +57,17 @@ export default function ResidenteHome() {
   const [cargando, setCargando] = useState(true)
   const [creando, setCreando] = useState(false)
   const [verAnteriores, setVerAnteriores] = useState(false)
-  const { avisos, sinLeer, marcarLeidos } = useAvisos(casa || undefined, '/residente')
+  const { avisos, sinLeer, marcarLeidos } = useAvisos(casa || undefined, '/residente', false)
+
+  const [cuotas, setCuotas] = useState<Cuota[]>([])
+  const [anuncios, setAnuncios] = useState<Anuncio[]>([])
+  const cargarComunidad = useCallback(async () => {
+    try {
+      const [c, a] = await Promise.all([comunidadService.estadoDeCuenta(casa), comunidadService.anuncios()])
+      setCuotas(c); setAnuncios(a)
+    } catch { /* el resumen es secundario */ }
+  }, [casa])
+  useEffect(() => { void cargarComunidad(); return comunidadService.suscribir(() => void cargarComunidad()) }, [cargarComunidad])
 
   const recargar = useCallback(async () => {
     if (!casa) return
@@ -113,6 +127,9 @@ export default function ResidenteHome() {
           </span>
           <Icon n="mas" size={22} stroke={2.2} />
         </button>
+
+        {/* Resumen: pagos y anuncios */}
+        <ResumenComunidad cuotas={cuotas} anuncios={anuncios} />
 
         {/* Paquetes que esperan en caseta */}
         {enCaseta.length > 0 && (
@@ -230,6 +247,34 @@ function FilaPase({ pase: p, i, onAbrir }: { pase: PaseResidente; i: number; onA
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.8125rem] font-semibold ${e.clase}`}>{e.texto}</span>
       </button>
     </li>
+  )
+}
+
+function ResumenComunidad({ cuotas, anuncios }: { cuotas: Cuota[]; anuncios: Anuncio[] }) {
+  const porPagar = cuotas.filter((c) => c.estado === 'PENDIENTE' || c.estado === 'ATRASADO')
+  const atrasado = porPagar.some((c) => c.estado === 'ATRASADO')
+  const visto = leerVisto()
+  const nuevos = anuncios.filter((a) => a.publicadoEn.getTime() > visto).length
+  const ultimo = anuncios[0]
+  const tarjeta = 'anim-entrar flex flex-col gap-1 rounded-[22px] bg-panel p-4 shadow-tarjeta transition-transform duration-150 active:scale-[0.98] min-w-0'
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <Link to="/residente/pagos" className={tarjeta} style={{ animationDelay: '40ms' }}>
+        <span className={`grid place-items-center h-9 w-9 rounded-[11px] ${porPagar.length ? (atrasado ? 'bg-peligro/[0.1] text-peligro' : 'bg-alerta/[0.12] text-alerta') : 'bg-ok/[0.12] text-ok'}`}><Icon n="pagos" size={19} /></span>
+        <span className="mt-1 text-[0.8125rem] font-medium text-suave">Cuota</span>
+        <span className={`text-[1.0625rem] font-semibold leading-tight cifras ${atrasado ? 'text-peligro' : ''}`}>
+          {cuotas.length === 0 ? '…' : porPagar.length ? `${pesos(porPagar.reduce((s, c) => s + c.monto, 0))} ${atrasado ? 'atrasado' : 'por pagar'}` : 'Al corriente'}
+        </span>
+      </Link>
+      <Link to="/residente/anuncios" className={tarjeta} style={{ animationDelay: '70ms' }}>
+        <span className="relative grid place-items-center h-9 w-9 rounded-[11px] bg-acento/[0.1] text-acento">
+          <Icon n="megafono" size={19} />
+          {nuevos > 0 && <span className="anim-pop absolute -right-1.5 -top-1.5 grid place-items-center min-w-[20px] h-5 px-1 rounded-full bg-peligro text-white text-[0.6875rem] font-bold cifras ring-2 ring-panel">{nuevos}</span>}
+        </span>
+        <span className="mt-1 text-[0.8125rem] font-medium text-suave">Anuncios</span>
+        <span className="text-[1.0625rem] font-semibold leading-tight line-clamp-2">{ultimo ? ultimo.titulo : 'Sin anuncios'}</span>
+      </Link>
+    </div>
   )
 }
 

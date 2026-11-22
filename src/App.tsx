@@ -7,6 +7,9 @@ import AppShell from './shared/ui/AppShell'
 import ResidenteHome from './features/residente/ResidenteHome'
 import GuardiaHome from './features/guardia/GuardiaHome'
 import AdminHome from './features/admin/AdminHome'
+import AdminAnuncios from './features/admin/AdminAnuncios'
+import PagosPage from './features/residente/PagosPage'
+import AnunciosPage from './features/residente/AnunciosPage'
 import PrivacidadPage from './features/legal/PrivacidadPage'
 import TerminosPage from './features/legal/TerminosPage'
 import CookiesPage from './features/legal/CookiesPage'
@@ -27,8 +30,11 @@ export default function App() {
         <Route path="/cookies" element={<CookiesPage />} />
         <Route element={<AppShell />}>
           <Route path="/residente" element={<RequireRole rol="RESIDENTE"><ResidenteHome /></RequireRole>} />
+          <Route path="/residente/pagos" element={<RequireRole rol="RESIDENTE"><PagosPage /></RequireRole>} />
+          <Route path="/residente/anuncios" element={<RequireRole rol="RESIDENTE"><AnunciosPage /></RequireRole>} />
           <Route path="/guardia" element={<RequireRole rol="GUARDIA"><GuardiaHome /></RequireRole>} />
           <Route path="/admin" element={<RequireRole rol="ADMIN"><AdminHome /></RequireRole>} />
+          <Route path="/admin/anuncios" element={<RequireRole rol="ADMIN"><AdminAnuncios /></RequireRole>} />
           <Route path="/perfil" element={<RequireRole><PerfilPage /></RequireRole>} />
         </Route>
         <Route path="*" element={<Navigate to={user ? rutaInicio(user.rol) : '/login'} replace />} />

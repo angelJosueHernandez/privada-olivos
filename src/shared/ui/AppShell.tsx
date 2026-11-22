@@ -4,6 +4,8 @@ import { INACTIVIDAD_MIN } from '../../features/auth/permisos'
 import { useInactividad } from '../../features/auth/useInactividad'
 import Icon from './Icon'
 import Marca from './Marca'
+import { BarraPestanas, PestanasSuperiores, SECCIONES } from './Navegacion'
+import AvisosGlobales from '../avisos/AvisosGlobales'
 
 const ETIQUETA = { ADMIN: 'Administración', RESIDENTE: 'Residente', GUARDIA: 'Caseta' }
 
@@ -15,6 +17,7 @@ export default function AppShell() {
   // Cierre automático por inactividad según el rol
   useInactividad(user ? INACTIVIDAD_MIN[user.rol] : 0, logout, !!user)
   if (!user) return <Navigate to="/login" replace />
+  const conPestanas = !!SECCIONES[user.rol]
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="material sticky top-0 z-20 border-b border-texto/[0.08] pt-[env(safe-area-inset-top)]">
@@ -28,6 +31,7 @@ export default function AppShell() {
               </p>
             </div>
           </div>
+          <PestanasSuperiores rol={user.rol} />
           <div className="flex items-center gap-2">
             <Link to="/perfil" aria-label={`Mi perfil: ${user.nombre}`}
               className="flex items-center gap-2.5 rounded-full pr-1 sm:pr-3 text-[0.875rem] text-suave hover:bg-texto/[0.05] transition-colors">
@@ -44,14 +48,16 @@ export default function AppShell() {
           </div>
         </div>
       </header>
-      <main className="flex-1 w-full max-w-5xl mx-auto px-5 pt-8 sm:pt-12 pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
+      <main className={`flex-1 w-full max-w-5xl mx-auto px-5 pt-8 sm:pt-12 ${conPestanas ? 'pb-10' : 'pb-[calc(env(safe-area-inset-bottom)+2.5rem)]'}`}>
         <Outlet />
       </main>
-      <footer className="w-full max-w-5xl mx-auto px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] flex flex-wrap gap-x-5 gap-y-2 text-[0.8125rem] text-suave">
+      <footer className={`w-full max-w-5xl mx-auto px-5 flex ${conPestanas ? 'pb-[calc(env(safe-area-inset-bottom)+5.5rem)] sm:pb-6' : 'pb-[calc(env(safe-area-inset-bottom)+1.5rem)]'} flex-wrap gap-x-5 gap-y-2 text-[0.8125rem] text-suave`}>
         <Link to="/privacidad" className="hover:text-texto hover:underline underline-offset-4">Aviso de privacidad</Link>
         <Link to="/terminos" className="hover:text-texto hover:underline underline-offset-4">Términos y condiciones</Link>
         <Link to="/cookies" className="hover:text-texto hover:underline underline-offset-4">Cookies</Link>
       </footer>
+      <BarraPestanas rol={user.rol} />
+      <AvisosGlobales user={user} />
     </div>
   )
 }

@@ -353,9 +353,21 @@ export const casetaService = {
     return demo.accesos.filter((a) => a.casa === casa).sort((a, b) => b.entrada.getTime() - a.entrada.getTime())
   },
 
-  /** Avisos para una casa o para la caseta ('CASETA'), del más nuevo al más viejo */
+  /** Avisos para una casa, la caseta ('CASETA') o la administración ('ADMIN'), del más nuevo al más viejo */
   async avisos(para: string): Promise<Aviso[]> {
-    if (hayApi) return (await api<Aviso[]>(para === 'CASETA' ? '/api/caseta/avisos' : '/api/casas/mia/avisos')).map((v) => fechas(v, ['en']))
-    return demo.avisos.filter((v) => v.para === para)
+    if (hayApi) {
+      const ruta = para === 'CASETA' ? '/api/caseta/avisos' : para === 'ADMIN' ? '/api/admin/avisos' : '/api/casas/mia/avisos'
+      return (await api<Aviso[]>(ruta)).map((v) => fechas(v, ['en']))
+    }
+    const esCasa = para !== 'CASETA' && para !== 'ADMIN'
+    return demo.avisos.filter((v) => v.para === para || (esCasa && v.para === 'TODAS'))
+  },
+
+  /** Demo: registra un aviso (con API los genera el servidor al guardar cada evento) */
+  avisar(v: Omit<Aviso, 'id' | 'en'>) {
+    if (hayApi) return
+    demo = leer()
+    nuevoAviso(v)
+    guardar()
   },
 }

@@ -22,7 +22,7 @@ export default function AvisoCookies() {
 
   return (
     <div role="region" aria-label="Aviso de cookies"
-      className="anim-entrar fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 sm:left-auto sm:right-5 sm:bottom-5 sm:max-w-[400px]
+      className="anim-entrar fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-40 sm:left-auto sm:right-5 sm:bottom-5 sm:max-w-[400px]
         material rounded-[20px] border border-texto/[0.08] shadow-[0_10px_40px_-12px_rgb(0_0_0/0.25)] p-4">
       <p className="text-[0.9375rem] leading-[1.45] text-texto">
         Solo usamos almacenamiento esencial para que la app funcione de forma segura. Sin publicidad ni rastreo.{' '}
