@@ -12,8 +12,8 @@ export default defineConfig({
         short_name: 'Privada',
         lang: 'es',
         display: 'standalone',
-        theme_color: '#1F4D36',
-        background_color: '#F4F6F2',
+        theme_color: '#F5F5F7',
+        background_color: '#F5F5F7',
         // TODO: agregar iconos 192x192 y 512x512 en /public para poder instalarla
         icons: [],
       },

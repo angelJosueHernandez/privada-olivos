@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-22T00:00:00Z",
+  "title": "Design System: Mi Privada",
+  "extensions": {
+    "colorMeta": {
+      "acento-olivo": { "role": "primary", "displayName": "Acento olivo", "tonalRamp": ["#0E2A1B", "#164029", "#1E5737", "#267048", "#3C8A5F", "#5CC489", "#9FDDB8", "#E1F4E8"] },
+      "fondo-gris": { "role": "neutral", "displayName": "Fondo gris", "tonalRamp": ["#1D1D1F", "#3A3A3C", "#6A6A70", "#AEAEB2", "#D2D2D7", "#E5E5EA", "#F5F5F7", "#FFFFFF"] },
+      "peligro": { "role": "error", "displayName": "Peligro" }
+    },
+    "typographyMeta": {
+      "titulo-grande": { "displayName": "Título grande", "purpose": "Un título por pantalla, estilo large title de iOS." },
+      "cuerpo": { "displayName": "Cuerpo", "purpose": "Texto, campos y botones a 17px." }
+    },
+    "shadows": [
+      { "name": "tarjeta", "value": "0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.12)", "purpose": "Tarjetas sobre el fondo gris." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.23, 1, 0.32, 1)", "purpose": "Entradas y respuesta al presionar." },
+      { "name": "presionar", "value": "transform 160ms var(--ease-out), scale 0.97", "purpose": "Botones al presionar." },
+      { "name": "entrar", "value": "260ms opacity + translateY(8px)", "purpose": "Cambio de paso en el login." },
+      { "name": "sacudir", "value": "300ms translateX", "purpose": "Error de inicio de sesión." }
+    ],
+    "breakpoints": [ { "name": "sm", "value": "640px" } ]
+  },
+  "components": [
+    {
+      "name": "Botón principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal en píldora.",
+      "html": "<button class=\"ds-btn-primario\">Continuar</button>",
+      "css": ".ds-btn-primario{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 24px;border:0;border-radius:9999px;background:#267048;color:#fff;font:600 17px/1 -apple-system,BlinkMacSystemFont,'Inter Variable','Segoe UI',sans-serif;letter-spacing:-0.01em;cursor:pointer;transition:transform 160ms cubic-bezier(0.23,1,0.32,1),background-color 160ms}.ds-btn-primario:hover{background:rgba(38,112,72,.9)}.ds-btn-primario:active{transform:scale(.97)}.ds-btn-primario:focus-visible{outline:3px solid rgba(38,112,72,.55);outline-offset:2px}"
+    },
+    {
+      "name": "Botón secundario",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Acciones de menor peso.",
+      "html": "<button class=\"ds-btn-secundario\">Usar otra cuenta</button>",
+      "css": ".ds-btn-secundario{height:48px;padding:0 24px;border:0;border-radius:9999px;background:rgba(29,29,31,.06);color:#1D1D1F;font:600 17px/1 -apple-system,BlinkMacSystemFont,'Inter Variable','Segoe UI',sans-serif;cursor:pointer;transition:transform 160ms cubic-bezier(0.23,1,0.32,1)}.ds-btn-secundario:hover{background:rgba(29,29,31,.1)}.ds-btn-secundario:active{transform:scale(.97)}"
+    },
+    {
+      "name": "Grupo de campos",
+      "kind": "input",
+      "refersTo": "field-group",
+      "description": "Correo y contraseña en un solo bloque, estilo iOS.",
+      "html": "<div class=\"ds-grupo\"><input class=\"ds-campo\" placeholder=\"Correo electrónico\"><input class=\"ds-campo ds-sep\" type=\"password\" placeholder=\"Contraseña\"></div>",
+      "css": ".ds-grupo{width:320px;border:1px solid #D2D2D7;border-radius:16px;background:#fff;overflow:hidden}.ds-grupo:focus-within{border-color:#267048;box-shadow:0 0 0 4px rgba(38,112,72,.15)}.ds-campo{display:block;width:100%;height:58px;padding:0 16px;border:0;background:transparent;font:400 17px -apple-system,BlinkMacSystemFont,'Inter Variable','Segoe UI',sans-serif;color:#1D1D1F;outline:none;caret-color:#267048}.ds-sep{border-top:1px solid #E5E5EA}"
+    },
+    {
+      "name": "Estado vacío",
+      "kind": "card",
+      "refersTo": "empty-card",
+      "description": "Tarjeta con ícono tintado, título, texto y acción.",
+      "html": "<section class=\"ds-vacio\"><span class=\"ds-vacio-ico\"><svg viewBox=\"0 0 24 24\" width=\"30\" height=\"30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"><path d=\"M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z\"/></svg></span><h2>Aún no has creado códigos</h2><p>Crea un código para que tu visita pase por la caseta sin esperar.</p></section>",
+      "css": ".ds-vacio{max-width:420px;padding:56px 24px;border-radius:28px;background:#fff;box-shadow:0 1px 2px rgb(0 0 0/.04),0 8px 24px -12px rgb(0 0 0/.12);text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Inter Variable','Segoe UI',sans-serif}.ds-vacio-ico{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:20px;background:rgba(38,112,72,.12);color:#267048}.ds-vacio h2{margin:24px 0 0;font-size:22px;font-weight:600;letter-spacing:-0.015em;color:#1D1D1F}.ds-vacio p{margin:8px auto 0;max-width:34ch;font-size:17px;line-height:1.6;color:#6A6A70}"
+    },
+    {
+      "name": "Barra superior translúcida",
+      "kind": "nav",
+      "description": "Barra fija con material translúcido.",
+      "html": "<header class=\"ds-barra\"><b>Los Olivos</b><span>Residente · Calle Palma 104</span></header>",
+      "css": ".ds-barra{display:flex;flex-direction:column;justify-content:center;height:56px;padding:0 20px;background:rgba(255,255,255,.72);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid rgba(29,29,31,.08);font-family:-apple-system,BlinkMacSystemFont,'Inter Variable','Segoe UI',sans-serif}.ds-barra b{font-size:15px;font-weight:600;color:#1D1D1F}.ds-barra span{font-size:12px;color:#6A6A70}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Calma de Apple para la operación diaria de una privada",
+    "overview": "Lenguaje de diseño de Apple aplicado a una app de acceso y pagos: fondo gris, superficies blancas, títulos grandes y un solo acento por privada.",
+    "keyCharacteristics": ["Un acento intercambiable por privada", "Campos agrupados estilo iOS", "Barra translúcida", "Botones en píldora que responden al presionar", "Siempre en modo claro"],
+    "rules": [{ "name": "La regla de un acento", "body": "El verde solo marca lo que se puede tocar.", "section": "colors" }],
+    "dos": ["Un título grande por pantalla", "Tamaños en rem", "Validar al enviar"],
+    "donts": ["Gradientes de texto o manchas difuminadas", "Botón principal deshabilitado esperando campos llenos", "Credenciales de prueba visibles"]
+  }
+}

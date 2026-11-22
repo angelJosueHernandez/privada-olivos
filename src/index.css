@@ -2,6 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-fondo text-texto font-sans antialiased; }
-:focus-visible { outline: 2px solid #3FB6A8; outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+/*
+  Tokens en canales RGB para que Tailwind pueda aplicar opacidad (bg-acento/10).
+  El color de acento es el de cada privada: cambiar --acento y --acento-texto basta para rebrandear.
+*/
+@layer base {
+  :root {
+    color-scheme: light;
+    --fondo: 245 245 247;
+    --panel: 255 255 255;
+    --borde: 210 210 215;
+    --separador: 229 229 234;
+    --texto: 29 29 31;
+    --suave: 106 106 112;
+    --acento: 38 112 72;
+    --acento-texto: 255 255 255;
+    --ok: 36 138 61;
+    --alerta: 178 80 0;
+    --peligro: 215 0 21;
+    --material: 255 255 255;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-fondo text-texto font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection { background: rgb(var(--acento) / 0.22); }
+  input, textarea { caret-color: rgb(var(--acento)); }
+  /* El autocompletado de Chrome no debe pintar los campos de otro color */
+  input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px rgb(var(--panel)) inset;
+    -webkit-text-fill-color: rgb(var(--texto));
+    transition: background-color 9999s;
+  }
+  :focus-visible { outline: 3px solid rgb(var(--acento) / 0.55); outline-offset: 2px; border-radius: 10px; }
+}
+
+@layer components {
+  /* Botón principal en píldora: responde al presionar, no al soltar */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 h-12 text-[1.0625rem] font-semibold tracking-[-0.01em]
+      select-none
+      active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100;
+    /* Movimiento con ease-out fuerte; el color de hover con ease */
+    transition: transform 160ms var(--ease-out), background-color 150ms ease, opacity 150ms ease;
+  }
+  .btn-primario { @apply btn bg-acento text-acento-texto hover:bg-acento/90; }
+  .btn-secundario { @apply btn bg-texto/[0.06] text-texto hover:bg-texto/10; }
+  .btn-chico { @apply h-9 px-4 text-[0.9375rem]; }
+
+  /* Superficie flotante translúcida: el contenido pasa por debajo */
+  .material {
+    background: rgb(var(--material) / 0.72);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .material { background: rgb(var(--material)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  }
+
+  .titulo-grande { @apply text-[2.125rem] leading-[1.1] font-bold tracking-[-0.025em] sm:text-[2.5rem]; }
+}
+
+@layer utilities {
+  .cifras { font-variant-numeric: tabular-nums; }
+}
+
+/* Movimiento: un paso del login entra suave; el error sacude el grupo de campos como en Apple */
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes sacudir {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+.anim-entrar { animation: entrar 260ms var(--ease-out) both; }
+.anim-sacudir { animation: sacudir 300ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+
+/* Reducir movimiento: sin desplazamientos ni sacudidas, pero se conserva un fundido breve */
+@keyframes aparecer { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .anim-entrar { animation: aparecer 200ms ease both; }
+  .anim-sacudir { animation: none; }
+  .btn { transition-property: background-color, opacity; }
+  .btn:active { transform: none; }
+}
