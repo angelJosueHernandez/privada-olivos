@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { Opciones, OpcionesMultiples } from '../../shared/ui/Opciones'
-import FotosGuiadas, { ApartadoFoto, FotoEvidencia, GUIAS } from './FotosGuiadas'
+import FotosGuiadas, { ApartadoFoto, FotoEvidencia, GUIAS, guiasPara } from './FotosGuiadas'
 import LectorPlaca from './LectorPlaca'
 import LogoEmpresa from './LogoEmpresa'
 import SelectorCasa from './SelectorCasa'
@@ -108,7 +108,7 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
   }
 
   // Fotos del paso 1: placa (si aplica) + las del tipo
-  const guias = GUIAS[tipo]
+  const guias = guiasPara(tipo, vehiculo)
   const conPlaca = tienePlaca(vehiculo)
   const totalFotos = guias.length + (conPlaca ? 1 : 0)
   const fotoPlaca = fotos.find((f) => f.slot === 'placa')
@@ -188,8 +188,13 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
           </Seccion>
 
           <Seccion titulo="Fotos de evidencia" retraso={80}
-            extra={<span className="text-[0.8125rem] font-medium text-suave cifras">{tomadas} de {totalFotos}</span>}>
+            extra={totalFotos > 0 ? <span className="text-[0.8125rem] font-medium text-suave cifras">{tomadas} de {totalFotos}</span> : undefined}>
             <div className="space-y-4">
+              {totalFotos === 0 && (
+                <p className="anim-llenar flex items-center gap-3 rounded-[18px] bg-panel px-4 py-4 text-[0.9375rem] text-suave shadow-tarjeta">
+                  <Icon n="check" size={18} stroke={2.4} />No se necesitan fotos para este registro. Continúa a los datos.
+                </p>
+              )}
               {conPlaca && (
                 <ApartadoFoto numero={1} total={totalFotos} titulo="Placa del vehículo" icono="auto" obligatoria
                   ayuda="Que se lean todos los caracteres. La IA llena la placa, el vehículo y el color." foto={fotoPlaca}>
@@ -207,7 +212,7 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
                   </div>
                 </ApartadoFoto>
               )}
-              <FotosGuiadas tipo={tipo} fotos={fotos} onCambio={setFotos} numeroInicial={conPlaca ? 2 : 1} total={totalFotos} />
+              <FotosGuiadas guias={guias} fotos={fotos} onCambio={setFotos} numeroInicial={conPlaca ? 2 : 1} total={totalFotos} />
             </div>
             <p className="mt-4 text-[0.8125rem] leading-[1.45] text-suave">
               Nunca fotografíes rostros ni identificaciones completas. Las fotos se reducen, se les quita la ubicación

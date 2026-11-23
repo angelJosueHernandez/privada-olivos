@@ -13,7 +13,9 @@ export const SECCIONES: Partial<Record<Rol, Destino[]>> = {
     { ruta: '/residente/anuncios', etiqueta: 'Anuncios', icono: 'megafono' },
   ],
   ADMIN: [
-    { ruta: '/admin', etiqueta: 'Pagos', icono: 'pagos' },
+    { ruta: '/admin', etiqueta: 'Resumen', icono: 'inicio' },
+    { ruta: '/admin/accesos', etiqueta: 'Accesos', icono: 'entrada' },
+    { ruta: '/admin/pagos', etiqueta: 'Pagos', icono: 'pagos' },
     { ruta: '/admin/anuncios', etiqueta: 'Anuncios', icono: 'megafono' },
   ],
 }
@@ -46,7 +48,7 @@ export function BarraPestanas({ rol }: { rol: Rol }) {
   const ir = useNavegarPestana(secciones)
   if (!secciones) return null
   return (
-    <nav aria-label="Secciones" className="material fixed inset-x-0 bottom-0 z-30 border-t border-texto/[0.08] pb-[env(safe-area-inset-bottom)] sm:hidden">
+    <nav aria-label="Secciones" className="material fixed inset-x-0 bottom-0 z-30 border-t border-texto/[0.08] pb-[env(safe-area-inset-bottom)] lg:hidden">
       <ul className="mx-auto flex max-w-md">
         {secciones.map((s) => (
           <li key={s.ruta} className="flex-1">
@@ -68,7 +70,7 @@ export function PestanasSuperiores({ rol }: { rol: Rol }) {
   const ir = useNavegarPestana(secciones)
   if (!secciones) return null
   return (
-    <nav aria-label="Secciones" className="hidden sm:flex items-center gap-1 rounded-full bg-texto/[0.06] p-1">
+    <nav aria-label="Secciones" className="hidden lg:flex items-center gap-1 rounded-full bg-texto/[0.06] p-1">
       {secciones.map((s) => (
         <NavLink key={s.ruta} to={s.ruta} end onClick={ir(s)}
           className={({ isActive }) => `inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-[0.875rem] font-medium transition-[background-color,color,box-shadow] duration-150

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Icon from '../../shared/ui/Icon'
-import { Anuncio, CATEGORIAS } from './tipos'
+import { Anuncio, anuncioVigente, CATEGORIAS } from './tipos'
 
 const VISTO = 'olv-anuncios-visto'
 /** Última vez que el usuario abrió los anuncios (para marcar los nuevos) */
@@ -18,11 +18,13 @@ const cuando = (d: Date) => {
 }
 
 /* Lista de anuncios. Los importantes van arriba y resaltados; los largos se pueden expandir. */
-export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorrar }: {
+export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorrar, onEditar }: {
   anuncios: Anuncio[]
   /** Anuncios publicados después de esta marca se muestran como "Nuevo" */
   vistoHasta?: number
   onBorrar?: (a: Anuncio) => void
+  /** Administración: muestra a quién va dirigido, vigencia y botón de editar */
+  onEditar?: (a: Anuncio) => void
 }) {
   const [abierto, setAbierto] = useState<string | null>(null)
   return (
@@ -33,12 +35,19 @@ export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorra
         const expandido = abierto === a.id || !largo
         const nuevo = a.publicadoEn.getTime() > vistoHasta
         return (
-          <li key={a.id} className={`anim-entrar rounded-[22px] bg-panel shadow-tarjeta p-5 ${a.importante ? 'ring-[1.5px] ring-inset ring-acento/40' : ''}`}
+          <li key={a.id} className={`anim-entrar rounded-[22px] bg-panel shadow-tarjeta p-5 ${a.importante ? 'ring-[1.5px] ring-inset ring-acento/40' : ''} ${anuncioVigente(a) ? '' : 'opacity-60'}`}
             style={{ animationDelay: `${Math.min(i * 40, 240)}ms` }}>
             <div className="flex flex-wrap items-center gap-2">
               {a.importante && <span className="inline-flex items-center gap-1 rounded-full bg-acento px-2.5 py-0.5 text-[0.75rem] font-semibold text-acento-texto"><Icon n="megafono" size={13} />Importante</span>}
               <span className={`rounded-full px-2.5 py-0.5 text-[0.75rem] font-semibold ${cat.clase}`}>{cat.etiqueta}</span>
               {nuevo && <span className="rounded-full bg-peligro px-2 py-0.5 text-[0.75rem] font-semibold text-white">Nuevo</span>}
+              {onEditar && (
+                <>
+                  <span className="rounded-full bg-fondo px-2.5 py-0.5 text-[0.75rem] font-semibold text-texto/75">{a.calle ? `Calle ${a.calle}` : 'Todas las casas'}</span>
+                  {!anuncioVigente(a) ? <span className="rounded-full bg-texto/[0.08] px-2.5 py-0.5 text-[0.75rem] font-semibold text-texto/60">Ya no se muestra</span>
+                    : a.vence ? <span className="rounded-full bg-fondo px-2.5 py-0.5 text-[0.75rem] font-semibold text-texto/75">Hasta {a.vence.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</span> : null}
+                </>
+              )}
               <span className="ml-auto text-[0.8125rem] text-suave">{cuando(a.publicadoEn)}</span>
             </div>
             <h3 className="mt-3 text-[1.1875rem] font-semibold tracking-[-0.01em] leading-snug">{a.titulo}</h3>
@@ -49,6 +58,12 @@ export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorra
                 {largo && (
                   <button type="button" onClick={() => setAbierto(expandido ? null : a.id)} className="min-h-11 px-2 text-[0.9375rem] font-medium text-acento">
                     {expandido ? 'Ver menos' : 'Leer más'}
+                  </button>
+                )}
+                {onEditar && (
+                  <button type="button" onClick={() => onEditar(a)} aria-label={`Editar anuncio: ${a.titulo}`}
+                    className="grid place-items-center h-11 w-11 rounded-full text-acento hover:bg-acento/[0.08] active:scale-95 transition-transform">
+                    <Icon n="editar" size={18} />
                   </button>
                 )}
                 {onBorrar && (

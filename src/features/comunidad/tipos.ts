@@ -16,12 +16,25 @@ export type Anuncio = {
   titulo: string
   cuerpo: string
   categoria: CategoriaAnuncio
-  /** Se fija arriba y se resalta */
+  /** Se fija arriba, se resalta y aparece como aviso en el inicio del residente */
   importante: boolean
+  /** Calle a la que va dirigido (sin valor: todas las casas) */
+  calle?: string
+  /** Deja de mostrarse a los residentes después de esta fecha (sin valor: no vence) */
+  vence?: Date
   publicadoPor: Actor
   publicadoEn: Date
+  editadoEn?: Date
 }
-export type NuevoAnuncio = Pick<Anuncio, 'titulo' | 'cuerpo' | 'categoria' | 'importante'>
+export type NuevoAnuncio = Pick<Anuncio, 'titulo' | 'cuerpo' | 'categoria' | 'importante' | 'calle' | 'vence'>
+
+export const CALLES = ['Palma', 'Encino', 'Olmo'] as const
+export const calleDe = (casa: string) => casa.replace(/^Calle\s+/i, '').replace(/\s+\d+.*$/, '')
+export const anuncioVigente = (a: Anuncio, ahora = Date.now()) => !a.vence || a.vence.getTime() > ahora
+export const anuncioPara = (a: Anuncio, casa: string) => !a.calle || calleDe(casa) === a.calle
+
+/** Cobranza de una casa (vista de administración) */
+export type CobranzaCasa = { casa: string; atrasados: string[]; adeudo: number; alCorriente: boolean; enRevision: boolean }
 
 // ---------- Cuotas y comprobantes ----------
 export type EstadoCuota = 'PENDIENTE' | 'ATRASADO' | 'EN_REVISION' | 'PAGADO'
@@ -70,6 +83,9 @@ export const MOTIVOS_RECHAZO = [
   'Es de otro periodo',
   'Comprobante repetido',
 ] as const
+
+/** "2026-11-23" con la fecha LOCAL (para <input type="date">) */
+export const fechaLocal = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 export const pesos = (n: number) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })
 export const nombrePeriodo = (p: string) => {

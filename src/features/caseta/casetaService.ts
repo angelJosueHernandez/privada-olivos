@@ -360,7 +360,8 @@ export const casetaService = {
       return (await api<Aviso[]>(ruta)).map((v) => fechas(v, ['en']))
     }
     const esCasa = para !== 'CASETA' && para !== 'ADMIN'
-    return demo.avisos.filter((v) => v.para === para || (esCasa && v.para === 'TODAS'))
+    const calle = para.replace(/^Calle\s+/i, '').replace(/\s+\d+.*$/, '')
+    return demo.avisos.filter((v) => v.para === para || (esCasa && (v.para === 'TODAS' || v.para === `CALLE:${calle}`)))
   },
 
   /** Demo: registra un aviso (con API los genera el servidor al guardar cada evento) */

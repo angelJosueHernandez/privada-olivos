@@ -10,33 +10,41 @@ import { useAuth } from '../auth/AuthContext'
 import type { Actor } from '../caseta/tipos'
 import { comunidadService } from '../comunidad/comunidadService'
 import ListaAnuncios from '../comunidad/ListaAnuncios'
-import { Anuncio, CATEGORIAS, CategoriaAnuncio } from '../comunidad/tipos'
+import { Anuncio, anuncioVigente, CALLES, CATEGORIAS, CategoriaAnuncio, fechaLocal, NuevoAnuncio } from '../comunidad/tipos'
 
-const FORM = 'nuevo-anuncio'
+const FORM = 'anuncio'
 const campo = 'block w-full rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-texto/40'
+type Vigencia = 'SIEMPRE' | 'SEMANA' | 'MES' | 'FECHA'
+type Filtro = 'VISIBLES' | 'TODOS'
 
-/* Administración: publica anuncios para todas las casas (les llega notificación) */
+/* Administración: configura los anuncios que ven los residentes (a quién, hasta cuándo, si se destacan) */
 export default function AdminAnuncios() {
   const { user } = useAuth()
   const actor: Actor = useMemo(() => ({ id: user?.id ?? '', nombre: user?.nombre ?? '', rol: 'ADMIN' }), [user])
   const [anuncios, setAnuncios] = useState<Anuncio[] | null>(null)
-  const [creando, setCreando] = useState(false)
+  const [editando, setEditando] = useState<Anuncio | 'nuevo' | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [borrar, setBorrar] = useState<Anuncio | null>(null)
+  const [filtro, setFiltro] = useState<Filtro>('VISIBLES')
 
   const cargar = useCallback(async () => {
     try { setAnuncios(await comunidadService.anuncios()) } catch { toast.error('No se pudieron cargar los anuncios') }
   }, [])
   useEffect(() => { void cargar(); return comunidadService.suscribir(() => void cargar()) }, [cargar])
-  useAtrasCierra(creando, () => setCreando(false))
+  useAtrasCierra(editando !== null, () => setEditando(null))
 
-  const publicar = async (d: { titulo: string; cuerpo: string; categoria: CategoriaAnuncio; importante: boolean }) => {
+  const guardar = async (d: NuevoAnuncio) => {
     setEnviando(true)
     try {
-      await comunidadService.publicarAnuncio(d, actor)
-      toast.success('Anuncio publicado', { description: 'Se envió una notificación a todas las casas.' })
-      setCreando(false); void cargar()
-    } catch { toast.error('No se pudo publicar el anuncio') }
+      if (editando && editando !== 'nuevo') {
+        await comunidadService.editarAnuncio(editando.id, d)
+        toast.success('Anuncio actualizado')
+      } else {
+        await comunidadService.publicarAnuncio(d, actor)
+        toast.success('Anuncio publicado', { description: d.calle ? `Se notificó a las casas de Calle ${d.calle}.` : 'Se notificó a todas las casas.' })
+      }
+      setEditando(null); void cargar()
+    } catch { toast.error('No se pudo guardar el anuncio') }
     finally { setEnviando(false) }
   }
   const confirmarBorrado = async () => {
@@ -45,10 +53,21 @@ export default function AdminAnuncios() {
     catch { toast.error('No se pudo borrar') }
   }
 
+  const visibles = (anuncios ?? []).filter((a) => anuncioVigente(a))
+  const lista = filtro === 'VISIBLES' ? visibles : anuncios ?? []
+
   return (
     <>
-      <Encabezado titulo="Anuncios" detalle="Lo que publiques llega a todas las casas"
-        accion={<button onClick={() => setCreando(true)} className="btn-primario btn-chico"><Icon n="mas" size={17} stroke={2.2} />Nuevo</button>} />
+      <Encabezado titulo="Anuncios" detalle="Configura lo que ven los residentes"
+        accion={<button onClick={() => setEditando('nuevo')} className="btn-primario btn-chico"><Icon n="mas" size={17} stroke={2.2} />Nuevo</button>} />
+
+      <div role="tablist" aria-label="Filtrar anuncios" className="mb-4 inline-grid grid-cols-2 gap-1 rounded-[12px] bg-texto/[0.06] p-1">
+        {([['VISIBLES', 'Visibles', visibles.length], ['TODOS', 'Todos', anuncios?.length ?? 0]] as [Filtro, string, number][]).map(([v, t, n]) => (
+          <button key={v} role="tab" aria-selected={filtro === v} onClick={() => setFiltro(v)}
+            className={`h-9 px-4 rounded-[9px] text-[0.875rem] font-medium transition-[background-color,color,box-shadow] duration-150
+              ${filtro === v ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>{t} <span className="cifras">{n}</span></button>
+        ))}
+      </div>
 
       {borrar && (
         <div role="alertdialog" aria-label="Confirmar borrado" className="anim-llenar mb-4 rounded-[20px] bg-peligro/[0.06] p-4 ring-1 ring-inset ring-peligro/20">
@@ -62,33 +81,50 @@ export default function AdminAnuncios() {
       )}
 
       {anuncios === null ? <div className="h-40 rounded-[22px] bg-panel shadow-tarjeta animate-pulse" />
-        : anuncios.length === 0 ? <Vacio icono="megafono" titulo="Sin anuncios" texto="Publica avisos de mantenimiento, eventos o pagos para todas las casas." />
-        : <ListaAnuncios anuncios={anuncios} onBorrar={setBorrar} />}
+        : lista.length === 0 ? <Vacio icono="megafono" titulo="Sin anuncios" texto="Publica avisos de mantenimiento, eventos o pagos para todas las casas o para una calle." />
+        : <ListaAnuncios anuncios={lista} onBorrar={setBorrar} onEditar={setEditando} />}
 
-      {creando && (
-        <Hoja titulo="Nuevo anuncio" onCerrar={() => setCreando(false)}
-          pie={<button type="submit" form={FORM} disabled={enviando} className="btn-primario w-full">{enviando ? 'Publicando…' : <><Icon n="megafono" size={19} />Publicar y notificar</>}</button>}>
-          <FormAnuncio onPublicar={publicar} />
+      {editando && (
+        <Hoja titulo={editando === 'nuevo' ? 'Nuevo anuncio' : 'Editar anuncio'} onCerrar={() => setEditando(null)}
+          pie={<button type="submit" form={FORM} disabled={enviando} className="btn-primario w-full">
+            {enviando ? 'Guardando…' : editando === 'nuevo' ? <><Icon n="megafono" size={19} />Publicar y notificar</> : 'Guardar cambios'}
+          </button>}>
+          <FormAnuncio inicial={editando === 'nuevo' ? undefined : editando} onGuardar={guardar} />
         </Hoja>
       )}
     </>
   )
 }
 
-function FormAnuncio({ onPublicar }: { onPublicar: (d: { titulo: string; cuerpo: string; categoria: CategoriaAnuncio; importante: boolean }) => Promise<void> }) {
-  const [titulo, setTitulo] = useState('')
-  const [cuerpo, setCuerpo] = useState('')
-  const [categoria, setCategoria] = useState<CategoriaAnuncio | null>('GENERAL')
-  const [importante, setImportante] = useState(false)
+function FormAnuncio({ inicial, onGuardar }: { inicial?: Anuncio; onGuardar: (d: NuevoAnuncio) => Promise<void> }) {
+  const [titulo, setTitulo] = useState(inicial?.titulo ?? '')
+  const [cuerpo, setCuerpo] = useState(inicial?.cuerpo ?? '')
+  const [categoria, setCategoria] = useState<CategoriaAnuncio | null>(inicial?.categoria ?? 'GENERAL')
+  const [importante, setImportante] = useState(inicial?.importante ?? false)
+  const [calle, setCalle] = useState<string>(inicial?.calle ?? 'TODAS')
+  const [vigencia, setVigencia] = useState<Vigencia>(inicial?.vence ? 'FECHA' : 'SIEMPRE')
+  const [fecha, setFecha] = useState(inicial?.vence ? fechaLocal(inicial.vence) : '')
   const [error, setError] = useState('')
+  const hoy = fechaLocal()
+
+  const calcularVence = (): Date | undefined | null => {
+    const d = new Date()
+    if (vigencia === 'SIEMPRE') return undefined
+    if (vigencia === 'SEMANA') { d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); return d }
+    if (vigencia === 'MES') { d.setMonth(d.getMonth() + 1); d.setHours(23, 59, 0, 0); return d }
+    if (!fecha) return null
+    const f = new Date(`${fecha}T23:59:00`)
+    return isNaN(f.getTime()) || f.getTime() < Date.now() ? null : f
+  }
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
     const t = titulo.trim(), c = cuerpo.trim()
-    const falta = t.length < 4 ? 'Escribe un título.' : c.length < 10 ? 'Escribe el mensaje.' : !categoria ? 'Elige una categoría.' : ''
+    const vence = calcularVence()
+    const falta = t.length < 4 ? 'Escribe un título.' : c.length < 10 ? 'Escribe el mensaje.' : !categoria ? 'Elige una categoría.' : vence === null ? 'Elige una fecha a partir de hoy.' : ''
     if (falta) { setError(falta); toast.error(falta); return }
     setError('')
-    await onPublicar({ titulo: t.slice(0, 90), cuerpo: c.slice(0, 2000), categoria: categoria!, importante })
+    await onGuardar({ titulo: t.slice(0, 90), cuerpo: c.slice(0, 2000), categoria: categoria!, importante, calle: calle === 'TODAS' ? undefined : calle, vence: vence ?? undefined })
   }
 
   return (
@@ -107,10 +143,24 @@ function FormAnuncio({ onPublicar }: { onPublicar: (d: { titulo: string; cuerpo:
         <h3 className="mb-3 text-[1.0625rem] font-semibold">Categoría</h3>
         <Opciones etiqueta="Categoría" valor={categoria} opcional={false} onCambio={setCategoria} opciones={CATEGORIAS.map((c) => ({ valor: c.valor, etiqueta: c.etiqueta }))} />
       </div>
-      <label className="anim-entrar flex items-center gap-4 rounded-[18px] bg-panel p-4 shadow-tarjeta cursor-pointer" style={{ animationDelay: '120ms' }}>
+      <div className="anim-entrar" style={{ animationDelay: '120ms' }}>
+        <h3 className="mb-3 text-[1.0625rem] font-semibold">¿Para quién?</h3>
+        <Opciones etiqueta="Destinatarios" valor={calle} opcional={false} onCambio={(v) => v && setCalle(v)}
+          opciones={[{ valor: 'TODAS', etiqueta: 'Todas las casas' }, ...CALLES.map((c) => ({ valor: c as string, etiqueta: `Calle ${c}` }))]} />
+      </div>
+      <div className="anim-entrar" style={{ animationDelay: '160ms' }}>
+        <h3 className="mb-3 text-[1.0625rem] font-semibold">¿Hasta cuándo se muestra?</h3>
+        <Opciones etiqueta="Vigencia" valor={vigencia} opcional={false} onCambio={(v) => v && setVigencia(v)}
+          opciones={[{ valor: 'SIEMPRE' as Vigencia, etiqueta: 'Sin fecha límite' }, { valor: 'SEMANA' as Vigencia, etiqueta: '1 semana' }, { valor: 'MES' as Vigencia, etiqueta: '1 mes' }, { valor: 'FECHA' as Vigencia, etiqueta: 'Elegir fecha', extra: <Icon n="calendario" size={16} /> }]} />
+        {vigencia === 'FECHA' && (
+          <input type="date" value={fecha} min={hoy} onChange={(e) => setFecha(e.target.value)} aria-label="Mostrar hasta"
+            className={`${campo} anim-llenar mt-3 h-14`} />
+        )}
+      </div>
+      <label className="anim-entrar flex items-center gap-4 rounded-[18px] bg-panel p-4 shadow-tarjeta cursor-pointer" style={{ animationDelay: '200ms' }}>
         <span className="min-w-0 flex-1">
-          <span className="block text-[1rem] font-semibold">Marcar como importante</span>
-          <span className="block text-[0.875rem] text-suave">Se fija arriba y se resalta para todos.</span>
+          <span className="block text-[1rem] font-semibold">Destacar en el inicio</span>
+          <span className="block text-[0.875rem] text-suave">Aparece como aviso importante arriba de todo en la app del residente.</span>
         </span>
         <input type="checkbox" checked={importante} onChange={(e) => setImportante(e.target.checked)} className="peer sr-only" />
         <span aria-hidden="true" className="relative h-[31px] w-[51px] shrink-0 rounded-full bg-texto/[0.16] transition-colors duration-200 peer-checked:bg-ok

@@ -10,7 +10,7 @@ import type { Actor } from '../caseta/tipos'
 import { prepararFoto } from '../caseta/fotos'
 import { comunidadService } from '../comunidad/comunidadService'
 import { COBRO, referenciaDe } from '../comunidad/config'
-import { Comprobante, Cuota, EstadoComprobante, EstadoCuota, METODOS, MetodoPago, nombrePeriodo, pesos } from '../comunidad/tipos'
+import { Comprobante, Cuota, EstadoComprobante, EstadoCuota, fechaLocal, METODOS, MetodoPago, nombrePeriodo, pesos } from '../comunidad/tipos'
 
 const ESTADO_CUOTA: Record<EstadoCuota, { texto: string; clase: string }> = {
   PAGADO: { texto: 'Pagado', clase: 'bg-ok/[0.12] text-ok' },
@@ -236,7 +236,7 @@ function FormComprobante({ porPagar, onEnviar }: {
         <Opciones etiqueta="Fecha" valor={cuando} opcional={false} onCambio={(v) => v && setCuando(v)} cuadricula="grid grid-cols-3 gap-2"
           opciones={[{ valor: 'HOY' as const, etiqueta: 'Hoy' }, { valor: 'AYER' as const, etiqueta: 'Ayer' }, { valor: 'OTRO' as const, etiqueta: 'Otro día' }]} />
         {cuando === 'OTRO' && (
-          <input type="date" value={otraFecha} onChange={(e) => setOtraFecha(e.target.value)} max={new Date().toISOString().slice(0, 10)} aria-label="Fecha del pago"
+          <input type="date" value={otraFecha} onChange={(e) => setOtraFecha(e.target.value)} max={fechaLocal()} aria-label="Fecha del pago"
             className="anim-llenar mt-3 block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-2 focus:ring-acento" />
         )}
       </section>

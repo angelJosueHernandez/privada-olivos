@@ -7,6 +7,6 @@ import { useAvisos } from '../../features/caseta/useAvisos'
 */
 export default function AvisosGlobales({ user }: { user: Usuario }) {
   const para = user.rol === 'RESIDENTE' ? user.casa : user.rol === 'ADMIN' ? 'ADMIN' : undefined
-  useAvisos(para, user.rol === 'ADMIN' ? '/admin' : '/residente')
+  useAvisos(para, user.rol === 'ADMIN' ? '/admin/pagos' : '/residente')
   return null
 }

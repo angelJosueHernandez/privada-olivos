@@ -2,10 +2,11 @@ import { ChangeEvent, ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { prepararFoto } from './fotos'
-import { NuevoAcceso } from './tipos'
+import { NuevoAcceso, Vehiculo, tienePlaca } from './tipos'
 
 export type FotoEvidencia = { blob: Blob; url: string; slot: string }
-export type Guia = { id: string; titulo: string; ayuda: string; icono: IconName; obligatoria: boolean }
+/** conVehiculo: solo se pide si llega en un vehículo con placa (no a pie ni en bici) */
+export type Guia = { id: string; titulo: string; ayuda: string; icono: IconName; obligatoria: boolean; conVehiculo?: boolean }
 
 /* Qué debe fotografiar el guardia en cada tipo de registro (nunca rostros ni identificaciones completas).
    Todas son opcionales: la única foto obligatoria es la de la placa, cuando llega en vehículo. */
@@ -25,9 +26,13 @@ export const GUIAS: Record<NuevoAcceso['tipo'], Guia[]> = {
     { id: 'material', titulo: 'Herramienta o material', ayuda: 'Lo que trae al entrar, para revisarlo a la salida.', icono: 'herramienta', obligatoria: false },
   ],
   VISITA_SIN_QR: [
-    { id: 'vehiculo', titulo: 'Vehículo completo', ayuda: 'De frente o de lado, sin personas.', icono: 'auto', obligatoria: false },
+    { id: 'vehiculo', titulo: 'Vehículo completo', ayuda: 'De frente o de lado, sin personas.', icono: 'auto', obligatoria: false, conVehiculo: true },
   ],
 }
+
+/** Fotos que aplican según el tipo de registro y cómo llegó (a pie no se pide el vehículo) */
+export const guiasPara = (tipo: NuevoAcceso['tipo'], vehiculo?: Vehiculo) =>
+  GUIAS[tipo].filter((g) => !g.conVehiculo || tienePlaca(vehiculo))
 
 /** Apartado de una sola foto: número, título, instrucciones y una vista previa grande */
 export function ApartadoFoto({ numero, total, titulo, ayuda, icono, obligatoria, foto, onTomar, onQuitar, children }: {
@@ -89,8 +94,8 @@ export function ApartadoFoto({ numero, total, titulo, ayuda, icono, obligatoria,
 }
 
 /** Las fotos guiadas de un tipo de registro, cada una en su propio apartado */
-export default function FotosGuiadas({ tipo, fotos, onCambio, numeroInicial = 1, total }: {
-  tipo: NuevoAcceso['tipo']
+export default function FotosGuiadas({ guias, fotos, onCambio, numeroInicial = 1, total }: {
+  guias: Guia[]
   fotos: FotoEvidencia[]
   onCambio: (f: FotoEvidencia[]) => void
   numeroInicial?: number
@@ -121,8 +126,8 @@ export default function FotosGuiadas({ tipo, fotos, onCambio, numeroInicial = 1,
 
   return (
     <div className="space-y-4">
-      {GUIAS[tipo].map((g, i) => (
-        <div key={`${tipo}-${g.id}`} className={procesando === g.id ? 'opacity-60 pointer-events-none' : ''}>
+      {guias.map((g, i) => (
+        <div key={g.id} className={procesando === g.id ? 'opacity-60 pointer-events-none' : ''}>
           <ApartadoFoto numero={numeroInicial + i} total={total} titulo={g.titulo} ayuda={g.ayuda} icono={g.icono}
             obligatoria={g.obligatoria} foto={fotos.find((f) => f.slot === g.id)} onTomar={tomar(g.id)} onQuitar={() => quitar(g.id)} />
         </div>

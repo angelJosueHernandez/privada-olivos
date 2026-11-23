@@ -63,7 +63,7 @@ export default function ResidenteHome() {
   const [anuncios, setAnuncios] = useState<Anuncio[]>([])
   const cargarComunidad = useCallback(async () => {
     try {
-      const [c, a] = await Promise.all([comunidadService.estadoDeCuenta(casa), comunidadService.anuncios()])
+      const [c, a] = await Promise.all([comunidadService.estadoDeCuenta(casa), comunidadService.anuncios(casa)])
       setCuotas(c); setAnuncios(a)
     } catch { /* el resumen es secundario */ }
   }, [casa])
@@ -127,6 +127,19 @@ export default function ResidenteHome() {
           </span>
           <Icon n="mas" size={22} stroke={2.2} />
         </button>
+
+        {/* Anuncios importantes de la administración: siempre visibles arriba mientras estén vigentes */}
+        {anuncios.filter((a) => a.importante).slice(0, 2).map((a) => (
+          <Link key={a.id} to="/residente/anuncios"
+            className="anim-entrar flex items-start gap-4 rounded-[22px] bg-acento/[0.08] p-4 ring-1 ring-inset ring-acento/25 transition-transform duration-150 active:scale-[0.98]">
+            <span className="grid place-items-center h-10 w-10 shrink-0 rounded-[12px] bg-acento text-acento-texto"><Icon n="megafono" size={20} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.75rem] font-semibold uppercase tracking-[0.04em] text-acento">Aviso importante</span>
+              <span className="block text-[1.0625rem] font-semibold leading-snug">{a.titulo}</span>
+              <span className="mt-0.5 block text-[0.9375rem] text-texto/75 line-clamp-2">{a.cuerpo}</span>
+            </span>
+          </Link>
+        ))}
 
         {/* Resumen: pagos y anuncios */}
         <ResumenComunidad cuotas={cuotas} anuncios={anuncios} />

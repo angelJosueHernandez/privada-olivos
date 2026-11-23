@@ -1,9 +1,9 @@
 import { api, hayApi } from '../../shared/api/cliente'
-import { casetaService } from '../caseta/casetaService'
+import { CASAS, casetaService } from '../caseta/casetaService'
 import type { Actor } from '../caseta/tipos'
 import { COBRO } from './config'
 import {
-  nombrePeriodo, pesos, type Anuncio, type Comprobante, type Cuota, type NuevoAnuncio, type NuevoComprobante,
+  anuncioPara, anuncioVigente, nombrePeriodo, pesos, type Anuncio, type CobranzaCasa, type Comprobante, type Cuota, type NuevoAnuncio, type NuevoComprobante,
 } from './tipos'
 
 /*
@@ -14,7 +14,7 @@ import {
 */
 
 type EstadoDemo = { anuncios: Anuncio[]; comprobantes: Comprobante[]; pagados: Record<string, string[]> }
-const CLAVE = 'olv-comunidad-v1'
+const CLAVE = 'olv-comunidad-v3'
 const admin: Actor = { id: '1', nombre: 'Alejandro Garza', rol: 'ADMIN' }
 const jorge: Actor = { id: 'u-res-7', nombre: 'Jorge Salinas', rol: 'RESIDENTE', casa: 'Calle Encino 212' }
 const rocha: Actor = { id: 'u-res-9', nombre: 'Familia Rocha', rol: 'RESIDENTE', casa: 'Calle Olmo 303' }
@@ -53,8 +53,15 @@ function semilla(): EstadoDemo {
     { id: 'c2', folio: 'PG-1102', casa: 'Calle Encino 212', periodos: [actual], monto: COBRO.cuotaMensual, metodo: 'TRANSFERENCIA', fechaPago: haceDias(2), referencia: 'ENCINO212', imagen: comprobanteEjemplo(COBRO.cuotaMensual, 'ENCINO212', haceDias(2)), estado: 'EN_REVISION', subidoPor: jorge, subidoEn: haceDias(2, 20) },
     { id: 'c3', folio: 'PG-1103', casa: 'Calle Olmo 303', periodos: [periodoDe(mesesAtras(1)), actual], monto: COBRO.cuotaMensual * 2, metodo: 'DEPOSITO', fechaPago: haceDias(1), referencia: 'OLMO303', imagen: comprobanteEjemplo(COBRO.cuotaMensual * 2, 'OLMO303', haceDias(1)), estado: 'EN_REVISION', subidoPor: rocha, subidoEn: haceDias(1, 16) },
   ]
-  // María (Palma 104) está al corriente hasta el mes pasado: el mes actual le aparece pendiente o atrasado
-  const pagados = { 'Calle Palma 104': [3, 2, 1].map((n) => periodoDe(mesesAtras(n))) }
+  // Historial de pagos de ejemplo: la mayoría al corriente hasta el mes pasado, algunas con atraso
+  // y unas cuantas que ya pagaron el mes actual. María (Palma 104) debe el mes actual.
+  const pagados: Record<string, string[]> = {}
+  CASAS.forEach((casa, i) => {
+    const debe = i % 9 === 4 ? 2 : i % 7 === 1 ? 1 : 0 // meses atrasados además del actual
+    const pagoActual = casa !== 'Calle Palma 104' && i % 5 !== 2
+    pagados[casa] = [3, 2, 1].filter((n) => n > debe).map((n) => periodoDe(mesesAtras(n)))
+    if (pagoActual && debe === 0) pagados[casa].push(actual)
+  })
   return { anuncios, comprobantes, pagados }
 }
 
@@ -63,13 +70,14 @@ const fechas = <T extends object>(o: T, campos: string[]): T => {
   campos.forEach((c) => { if (typeof r[c] === 'string') r[c] = new Date(r[c] as string) })
   return r as T
 }
+const revivirAnuncio = (a: Anuncio) => fechas(a, ['publicadoEn', 'vence', 'editadoEn'])
 const revivirComprobante = (c: Comprobante) => fechas(c, ['fechaPago', 'subidoEn', 'revisadoEn'])
 
 function leer(): EstadoDemo {
   try {
     const s = JSON.parse(localStorage.getItem(CLAVE) ?? 'null') as EstadoDemo | null
     if (s && Array.isArray(s.anuncios) && Array.isArray(s.comprobantes) && s.pagados) {
-      return { anuncios: s.anuncios.map((a) => fechas(a, ['publicadoEn'])), comprobantes: s.comprobantes.map(revivirComprobante), pagados: s.pagados }
+      return { anuncios: s.anuncios.map(revivirAnuncio), comprobantes: s.comprobantes.map(revivirComprobante), pagados: s.pagados }
     }
   } catch { /* se reinicia */ }
   return semilla()
@@ -111,18 +119,29 @@ export const comunidadService = {
   },
 
   // ---------- Anuncios ----------
-  async anuncios(): Promise<Anuncio[]> {
-    if (hayApi) return (await api<Anuncio[]>('/api/anuncios')).map((a) => fechas(a, ['publicadoEn']))
+  /**
+   * Con `casa`: lo que ve ese residente (vigentes y dirigidos a su calle o a todas).
+   * Sin `casa`: todos, para la administración. Con API el servidor filtra según la sesión.
+   */
+  async anuncios(casa?: string): Promise<Anuncio[]> {
+    if (hayApi) return (await api<Anuncio[]>(casa ? '/api/anuncios' : '/api/admin/anuncios')).map(revivirAnuncio)
     await espera(150)
-    return [...demo.anuncios].sort((a, b) => Number(b.importante) - Number(a.importante) || b.publicadoEn.getTime() - a.publicadoEn.getTime())
+    const lista = casa ? demo.anuncios.filter((a) => anuncioVigente(a) && anuncioPara(a, casa)) : demo.anuncios
+    return [...lista].sort((a, b) => Number(b.importante) - Number(a.importante) || b.publicadoEn.getTime() - a.publicadoEn.getTime())
+  },
+  async editarAnuncio(id: string, datos: NuevoAnuncio): Promise<void> {
+    if (hayApi) return api<void>(`/api/anuncios/${encodeURIComponent(id)}`, { metodo: 'PUT', cuerpo: datos })
+    await espera()
+    demo.anuncios = demo.anuncios.map((a) => (a.id === id ? { ...a, ...datos, editadoEn: new Date() } : a))
+    guardar()
   },
   async publicarAnuncio(datos: NuevoAnuncio, actor: Actor): Promise<Anuncio> {
-    if (hayApi) return fechas(await api<Anuncio>('/api/anuncios', { metodo: 'POST', cuerpo: datos }), ['publicadoEn'])
+    if (hayApi) return revivirAnuncio(await api<Anuncio>('/api/anuncios', { metodo: 'POST', cuerpo: datos }))
     await espera()
     const a: Anuncio = { ...datos, id: crypto.randomUUID(), publicadoPor: actor, publicadoEn: new Date() }
     demo.anuncios = [a, ...demo.anuncios]
     guardar()
-    casetaService.avisar({ para: 'TODAS', tipo: 'anuncio', titulo: `${a.importante ? 'Importante: ' : 'Nuevo anuncio: '}${a.titulo}`, cuerpo: a.cuerpo.slice(0, 140) })
+    casetaService.avisar({ para: a.calle ? `CALLE:${a.calle}` : 'TODAS', tipo: 'anuncio', titulo: `${a.importante ? 'Importante: ' : 'Nuevo anuncio: '}${a.titulo}`, cuerpo: a.cuerpo.slice(0, 140) })
     return a
   },
   async borrarAnuncio(id: string): Promise<void> {
@@ -161,6 +180,20 @@ export const comunidadService = {
   },
 
   // ---------- Pagos (administración) ----------
+  /** Cobranza de todas las casas: quién está al corriente y cuánto se debe */
+  async resumenCobranza(): Promise<CobranzaCasa[]> {
+    if (hayApi) return api<CobranzaCasa[]>('/api/admin/cobranza')
+    await espera(150)
+    return CASAS.map((casa) => {
+      const cuotas = cuotasDe(casa)
+      const atrasados = cuotas.filter((c) => c.estado === 'ATRASADO').map((c) => c.periodo)
+      const pendientes = cuotas.filter((c) => c.estado === 'ATRASADO' || c.estado === 'PENDIENTE')
+      return {
+        casa, atrasados, adeudo: pendientes.reduce((s, c) => s + c.monto, 0),
+        alCorriente: atrasados.length === 0, enRevision: cuotas.some((c) => c.estado === 'EN_REVISION'),
+      }
+    })
+  },
   async comprobantes(): Promise<Comprobante[]> {
     if (hayApi) return (await api<Comprobante[]>('/api/admin/comprobantes')).map(revivirComprobante)
     await espera(150)

@@ -8,6 +8,8 @@ import ResidenteHome from './features/residente/ResidenteHome'
 import GuardiaHome from './features/guardia/GuardiaHome'
 import AdminHome from './features/admin/AdminHome'
 import AdminAnuncios from './features/admin/AdminAnuncios'
+import AdminAccesos from './features/admin/AdminAccesos'
+import AdminPagos from './features/admin/AdminPagos'
 import PagosPage from './features/residente/PagosPage'
 import AnunciosPage from './features/residente/AnunciosPage'
 import PrivacidadPage from './features/legal/PrivacidadPage'
@@ -34,6 +36,8 @@ export default function App() {
           <Route path="/residente/anuncios" element={<RequireRole rol="RESIDENTE"><AnunciosPage /></RequireRole>} />
           <Route path="/guardia" element={<RequireRole rol="GUARDIA"><GuardiaHome /></RequireRole>} />
           <Route path="/admin" element={<RequireRole rol="ADMIN"><AdminHome /></RequireRole>} />
+          <Route path="/admin/accesos" element={<RequireRole rol="ADMIN"><AdminAccesos /></RequireRole>} />
+          <Route path="/admin/pagos" element={<RequireRole rol="ADMIN"><AdminPagos /></RequireRole>} />
           <Route path="/admin/anuncios" element={<RequireRole rol="ADMIN"><AdminAnuncios /></RequireRole>} />
           <Route path="/perfil" element={<RequireRole><PerfilPage /></RequireRole>} />
         </Route>
