@@ -60,15 +60,15 @@ export default function AdminPagos() {
       <Encabezado titulo="Pagos" detalle={lista === null ? 'Cargando…' : pendientes.length ? `${pendientes.length} comprobante${pendientes.length > 1 ? 's' : ''} por revisar · ${pesos(totalPendiente)}` : 'No hay comprobantes pendientes'} />
       <div className="mb-6"><TarjetaAvisos texto="Te avisamos en cuanto un residente suba un comprobante de pago." /></div>
 
-      <div role="tablist" aria-label="Filtrar comprobantes" className="mb-4 flex gap-1 overflow-x-auto rounded-[12px] bg-texto/[0.06] p-1 [scrollbar-width:none] sm:inline-flex">
+      <div role="group" aria-label="Filtrar comprobantes" className="mb-4 flex gap-1 overflow-x-auto rounded-[12px] bg-texto/[0.06] p-1 [scrollbar-width:none] sm:inline-flex">
         {PESTANAS.map(([v, t]) => (
-          <button key={v} role="tab" aria-selected={filtro === v} onClick={() => setFiltro(v)}
+          <button key={v} aria-pressed={filtro === v} onClick={() => setFiltro(v)}
             className={`flex-1 shrink-0 h-9 px-3 rounded-[9px] text-[0.875rem] font-medium whitespace-nowrap transition-[background-color,color,box-shadow] duration-150
               ${filtro === v ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>
             {t} <span className={`cifras ${v === 'EN_REVISION' && pendientes.length ? 'text-acento font-semibold' : ''}`}>{porEstado(v).length}</span>
           </button>
         ))}
-        <button role="tab" aria-selected={filtro === 'CASAS'} onClick={() => setFiltro('CASAS')}
+        <button aria-pressed={filtro === 'CASAS'} onClick={() => setFiltro('CASAS')}
           className={`flex-1 shrink-0 h-9 px-3 rounded-[9px] text-[0.875rem] font-medium whitespace-nowrap transition-[background-color,color,box-shadow] duration-150
             ${filtro === 'CASAS' ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>Casas</button>
       </div>
@@ -87,7 +87,7 @@ export default function AdminPagos() {
               <li key={c.id} className="anim-entrar" style={{ animationDelay: `${Math.min(i * 35, 210)}ms` }}>
                 <button type="button" onClick={() => setAbierto(c)}
                   className="flex w-full items-center gap-4 px-4 sm:px-5 py-4 text-left hover:bg-texto/[0.03] active:bg-texto/[0.05] transition-colors">
-                  {c.imagen ? <img src={c.imagen} alt="" className="h-14 w-14 shrink-0 rounded-[12px] object-cover ring-1 ring-inset ring-black/[0.06]" />
+                  {c.imagen ? <img src={c.imagen} alt="" loading="lazy" decoding="async" className="h-14 w-14 shrink-0 rounded-[12px] object-cover ring-1 ring-inset ring-black/[0.06]" />
                     : <span className="grid place-items-center h-14 w-14 shrink-0 rounded-[12px] bg-fondo text-texto/50"><Icon n="imagen" size={22} /></span>}
                   <span className="min-w-0 flex-1">
                     <span className="block text-[1rem] font-semibold truncate">{c.casa}</span>

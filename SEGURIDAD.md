@@ -65,12 +65,36 @@ esta página. La seguridad real vive en el servidor.
 ### 6. Pases QR
 - El QR solo lleva un identificador aleatorio y firmado (o un token opaco), nunca datos personales.
 - Expiración, uso único (o ventana horaria) y validación siempre en el servidor al escanear.
+- El código del demo (`OLV-XXXX-XX`, ~30 bits) es corto para escribirse a mano. En producción: generarlo en el
+  servidor con más entropía (≥ 10 caracteres o un token firmado), y limitar `POST /api/caseta/pases/validar` a
+  **sesión de guardia** con límite de intentos (p. ej. 20 por minuto) para que no se puedan adivinar códigos.
+- `POST /api/pases/{id}/cancelar`: solo el residente dueño de la casa del pase (o admin). Responder 404 si no es suyo.
 
 ### 7. Comprobantes de pago (subida de archivos)
 - Lista blanca: JPG, PNG, PDF. Validar los **bytes mágicos**, no solo la extensión. Tamaño máximo (por ejemplo 5 MB).
 - Renombrar con un UUID, guardar fuera de la carpeta pública (Blob Storage privado) y servir con
   `Content-Disposition: attachment` y `X-Content-Type-Options: nosniff`.
 - Nunca aceptar SVG ni HTML.
+- El navegador ya re-codifica la imagen (quita ubicación GPS y metadatos) y la reduce; **el servidor debe repetir
+  la validación** porque el navegador no es confiable.
+- `POST /api/admin/comprobantes/{id}/revision`: solo ADMIN de la misma privada; aceptar únicamente
+  `{ aprobar, motivo }` (motivo de la lista cerrada); el revisor y la hora salen de la sesión. Un comprobante ya
+  revisado no se puede volver a revisar (409).
+- El monto y los meses los valida el servidor contra la cuota real de la casa; el residente no decide cuánto debe.
+
+### 7b. Anuncios, cobranza y panel de administración
+- `POST/PUT/DELETE /api/anuncios` y todo `/api/admin/*` (comprobantes, cobranza, avisos, bitácora): **solo ADMIN**.
+- `GET /api/anuncios` (residente): el servidor filtra por privada, vigencia y calle de la casa de la sesión.
+- El texto de los anuncios se guarda y se devuelve como **texto plano** (la app nunca lo pinta como HTML).
+- La bitácora se exporta en CSV desde el navegador con protección contra **inyección de fórmulas** (las celdas que
+  empiezan con `= + - @` se escapan). Si la API ofrece su propia exportación, debe hacer lo mismo.
+
+### 7c. Notificaciones push
+- Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
+  push responde 404/410.
+- La llave **privada** VAPID solo en el servidor (Key Vault). La pública (`VITE_VAPID_PUBLIC_KEY`) sí puede ir al navegador.
+- El aviso solo lleva título, texto y una ruta interna (`/residente`, `/admin/pagos`…); el service worker rechaza
+  cualquier URL externa. Evitar datos sensibles en el texto: se ven en la pantalla bloqueada.
 
 ### 8. CORS y encabezados
 - CORS solo para el dominio de la app (nunca `*` con credenciales).
@@ -90,7 +114,7 @@ esta página. La seguridad real vive en el servidor.
 
 ## Variables de entorno del frontend
 
-`VITE_API_URL` es la única. **Todo lo que empieza con `VITE_` termina en el JavaScript público**:
+`VITE_API_URL` y `VITE_VAPID_PUBLIC_KEY` (pública por diseño). **Todo lo que empieza con `VITE_` termina en el JavaScript público**:
 nunca pongas ahí llaves, contraseñas ni cadenas de conexión. Ver `.env.example`.
 
 ## Pendiente conocido
@@ -98,4 +122,7 @@ nunca pongas ahí llaves, contraseñas ni cadenas de conexión. Ver `.env.exampl
 - Dependencias de desarrollo (Vite 5 / Workbox) con avisos moderados que solo afectan `npm run dev` en la máquina local.
   Se corrigen al migrar a Vite 8.
 - Cuando exista la API, agregar su dominio a `connect-src` en la CSP de `vercel.json`.
+- **Modo demostración:** los datos de prueba (pases, bitácora, comprobantes como imagen, anuncios) se guardan en el
+  `localStorage` del navegador para poder probar entre pestañas. Con `VITE_API_URL` configurada no se guarda nada de eso:
+  todo vive en el servidor. No usar el modo demostración con datos reales.
 - `/api/placas` sin sesión (ver arriba): poner límite de gasto en Anthropic.

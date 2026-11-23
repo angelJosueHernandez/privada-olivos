@@ -105,6 +105,10 @@ Fuente del sistema de Apple (SF Pro en dispositivos Apple); Inter Variable como 
 ### Hierarchy
 Escala usada en rem: 0.8125 · 0.875 · 0.9375 · 1 · 1.0625 · 1.25 · 1.75 · 2.125/2.5 (título) · 2.75 (titular del panel de computadora).
 
+- **Etiquetas mínimas:** 0.6875rem (barra de pestañas inferior, como la de iOS; nunca con menos de 65 % de opacidad) y 0.75rem (insignias como "Importante" o "Nuevo"). No se usan para texto de lectura.
+- **Cifras del panel:** 2rem–2.5rem en indicadores y en la cobranza; siempre con `cifras` (números tabulares).
+- **Gráficas:** una sola serie por gráfica, en el color de acento; las categorías se nombran con etiqueta e ícono, nunca solo con color. Cada gráfica trae su tabla equivalente para lectores de pantalla.
+
 - **Título grande** (2.125rem, 2.5rem desde `sm`, 700, tracking -0.025em): uno por pantalla, arriba a la izquierda (centrado en el login).
 - **Título de sección** (1.375rem, 600): títulos de estados vacíos.
 - **Cuerpo** (1.0625rem / 17px, como el cuerpo de iOS): textos, campos y botones.

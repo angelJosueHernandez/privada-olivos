@@ -54,7 +54,7 @@ export function BarraPestanas({ rol }: { rol: Rol }) {
           <li key={s.ruta} className="flex-1">
             <NavLink to={s.ruta} end onClick={ir(s)}
               className={({ isActive }) => `flex flex-col items-center gap-0.5 pt-2 pb-1.5 text-[0.6875rem] font-medium transition-colors duration-150
-                ${isActive ? 'text-acento' : 'text-texto/55'}`}>
+                ${isActive ? 'text-acento' : 'text-texto/65'}`}>
               <Icon n={s.icono} size={24} stroke={1.9} />
               {s.etiqueta}
             </NavLink>

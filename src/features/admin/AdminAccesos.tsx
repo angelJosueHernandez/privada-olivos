@@ -80,9 +80,9 @@ export default function AdminAccesos() {
           <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} maxLength={60} placeholder="Buscar nombre, casa, placas o folio"
             className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-texto/45" />
         </label>
-        <div role="tablist" aria-label="Estado" className="flex gap-1 overflow-x-auto rounded-[12px] bg-texto/[0.06] p-1 [scrollbar-width:none]">
+        <div role="group" aria-label="Estado" className="flex gap-1 overflow-x-auto rounded-[12px] bg-texto/[0.06] p-1 [scrollbar-width:none]">
           {([['TODOS', 'Todos'], ['DENTRO', 'Dentro'], ['CASETA', 'En caseta'], ['SALIERON', 'Salidas']] as [Estado, string][]).map(([v, t]) => (
-            <button key={v} role="tab" aria-selected={estado === v} onClick={() => setEstado(v)}
+            <button key={v} aria-pressed={estado === v} onClick={() => setEstado(v)}
               className={`flex-1 shrink-0 h-9 px-3 rounded-[9px] text-[0.875rem] font-medium whitespace-nowrap transition-[background-color,color,box-shadow] duration-150
                 ${estado === v ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>
               {t} <span className="cifras">{cuenta(v)}</span>

@@ -129,7 +129,7 @@ export default function PagosPage() {
               <li key={c.id}>
                 <button type="button" onClick={() => setVista({ modo: 'ver', comprobante: c })}
                   className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-texto/[0.03] active:bg-texto/[0.05] transition-colors">
-                  {c.imagen ? <img src={c.imagen} alt="" className="h-12 w-12 shrink-0 rounded-[10px] object-cover ring-1 ring-inset ring-black/[0.06]" />
+                  {c.imagen ? <img src={c.imagen} alt="" loading="lazy" decoding="async" className="h-12 w-12 shrink-0 rounded-[10px] object-cover ring-1 ring-inset ring-black/[0.06]" />
                     : <span className="grid place-items-center h-12 w-12 shrink-0 rounded-[10px] bg-fondo text-texto/50"><Icon n="imagen" size={20} /></span>}
                   <span className="min-w-0 flex-1">
                     <span className="block text-[1rem] font-semibold cifras">{pesos(c.monto)} · {c.periodos.map(mes).join(', ')}</span>

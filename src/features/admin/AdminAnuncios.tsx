@@ -61,9 +61,9 @@ export default function AdminAnuncios() {
       <Encabezado titulo="Anuncios" detalle="Configura lo que ven los residentes"
         accion={<button onClick={() => setEditando('nuevo')} className="btn-primario btn-chico"><Icon n="mas" size={17} stroke={2.2} />Nuevo</button>} />
 
-      <div role="tablist" aria-label="Filtrar anuncios" className="mb-4 inline-grid grid-cols-2 gap-1 rounded-[12px] bg-texto/[0.06] p-1">
+      <div role="group" aria-label="Filtrar anuncios" className="mb-4 inline-grid grid-cols-2 gap-1 rounded-[12px] bg-texto/[0.06] p-1">
         {([['VISIBLES', 'Visibles', visibles.length], ['TODOS', 'Todos', anuncios?.length ?? 0]] as [Filtro, string, number][]).map(([v, t, n]) => (
-          <button key={v} role="tab" aria-selected={filtro === v} onClick={() => setFiltro(v)}
+          <button key={v} aria-pressed={filtro === v} onClick={() => setFiltro(v)}
             className={`h-9 px-4 rounded-[9px] text-[0.875rem] font-medium transition-[background-color,color,box-shadow] duration-150
               ${filtro === v ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>{t} <span className="cifras">{n}</span></button>
         ))}
