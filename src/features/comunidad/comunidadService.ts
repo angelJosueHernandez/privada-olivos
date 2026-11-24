@@ -1,5 +1,6 @@
 import { api, hayApi } from '../../shared/api/cliente'
-import { CASAS, casetaService } from '../caseta/casetaService'
+import { casetaService } from '../caseta/casetaService'
+import { directorioService } from '../directorio/directorioService'
 import type { Actor } from '../caseta/tipos'
 import { COBRO } from './config'
 import {
@@ -59,7 +60,7 @@ function semilla(): EstadoDemo {
   // Historial de pagos de ejemplo: la mayoría al corriente hasta el mes pasado, algunas con atraso
   // y unas cuantas que ya pagaron el mes actual. María (Palma 104) debe el mes actual.
   const pagados: Record<string, string[]> = {}
-  CASAS.forEach((casa, i) => {
+  directorioService.casasActivas().forEach((casa, i) => {
     const debe = i % 9 === 4 ? 2 : i % 7 === 1 ? 1 : 0 // meses atrasados además del actual
     const pagoActual = casa !== 'Calle Palma 104' && i % 5 !== 2
     pagados[casa] = [3, 2, 1].filter((n) => n > debe).map((n) => periodoDe(mesesAtras(n)))
@@ -67,7 +68,7 @@ function semilla(): EstadoDemo {
   })
   // Algunas casas ya respondieron (María, de Palma 104, todavía no: así se puede probar)
   const respuestas: Respuestas = { n1: {}, n2: {} }
-  CASAS.forEach((casa, i) => {
+  directorioService.casasActivas().forEach((casa, i) => {
     if (casa === 'Calle Palma 104') return
     const por: Actor = { id: `u-casa-${i}`, nombre: 'Residente', rol: 'RESIDENTE', casa }
     if (i % 3 !== 0) respuestas.n1[casa] = { casa, valor: i % 5 === 1 ? 'NO_ASISTE' : 'ASISTE', personas: i % 5 === 1 ? undefined : 1 + (i % 3), por, en: haceDias(i % 2, 9 + (i % 10)) }
@@ -88,7 +89,7 @@ const revivirRespuestas = (rs: Respuestas): Respuestas =>
   Object.fromEntries(Object.entries(rs).map(([id, porCasa]) => [id, Object.fromEntries(Object.entries(porCasa).map(([c, r]) => [c, revivirRespuesta(r)]))]))
 const conRespuestas = (a: Anuncio): Anuncio => ({ ...revivirAnuncio(a), miRespuesta: a.miRespuesta && revivirRespuesta(a.miRespuesta), respuestas: a.respuestas?.map(revivirRespuesta) })
 /** Casas que reciben un anuncio (todas o las de su calle) */
-const casasDe = (a: Anuncio) => CASAS.filter((c) => anuncioPara(a, c))
+const casasDe = (a: Anuncio) => directorioService.casasActivas().filter((c) => anuncioPara(a, c))
 
 function leer(): EstadoDemo {
   try {
@@ -119,7 +120,10 @@ const listaPeriodos = (ps: string[]) => ps.map((p) => nombrePeriodo(p).split(' '
 function cuotasDe(casa: string): Cuota[] {
   const pagados = new Set(demo.pagados[casa] ?? [])
   const enRevision = new Set(demo.comprobantes.filter((c) => c.casa === casa && c.estado === 'EN_REVISION').flatMap((c) => c.periodos))
-  return [0, 1, 2, 3].map((n) => {
+  // Una casa dada de alta este mes no debe meses anteriores
+  const creada = directorioService.casaCreadaEn(casa)
+  const desde = creada ? periodoDe(creada) : ''
+  return [0, 1, 2, 3].filter((n) => periodoDe(mesesAtras(n)) >= desde).map((n) => {
     const d = mesesAtras(n)
     const periodo = periodoDe(d)
     const vence = new Date(d.getFullYear(), d.getMonth(), COBRO.diaVencimiento, 23, 59)
@@ -238,7 +242,7 @@ export const comunidadService = {
   async resumenCobranza(): Promise<CobranzaCasa[]> {
     if (hayApi) return api<CobranzaCasa[]>('/api/admin/cobranza')
     await espera(150)
-    return CASAS.map((casa) => {
+    return directorioService.casasActivas().map((casa) => {
       const cuotas = cuotasDe(casa)
       const atrasados = cuotas.filter((c) => c.estado === 'ATRASADO').map((c) => c.periodo)
       const pendientes = cuotas.filter((c) => c.estado === 'ATRASADO' || c.estado === 'PENDIENTE')

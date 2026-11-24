@@ -149,12 +149,6 @@ export function extraerCodigo(contenido: string): string | null {
   return m ? m[0] : null
 }
 
-export const CASAS = [
-  ...Array.from({ length: 10 }, (_, i) => `Calle Palma ${101 + i}`),
-  ...Array.from({ length: 12 }, (_, i) => `Calle Encino ${201 + i}`),
-  ...Array.from({ length: 6 }, (_, i) => `Calle Olmo ${301 + i}`),
-]
-
 /** Convierte una foto (Blob JPEG) a base64 sin el prefijo data: */
 async function aBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer())

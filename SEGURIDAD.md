@@ -91,6 +91,17 @@ esta página. La seguridad real vive en el servidor.
 
 - **Confirmaciones de anuncios** (`PUT /api/anuncios/{id}/respuesta`): la casa sale de la sesión, nunca del cuerpo. El servidor valida que el anuncio sea para esa casa, siga vigente y pida ese tipo de respuesta; `valor` contra lista cerrada y `personas` entero entre 1 y 10. Una respuesta por casa (upsert). El recordatorio (`POST /api/admin/anuncios/{id}/recordatorio`) es solo ADMIN y con límite (p. ej. 1 por anuncio cada 12 h) para no usarlo como spam.
 
+### 7d. Directorio: usuarios, casas y sesiones
+
+- **Solo ADMIN** puede llamar `/api/admin/usuarios*`, `/api/admin/casas*` y `/api/admin/bitacora`; el rol sale de la sesión del servidor, nunca del cuerpo ni de la URL.
+- **Reglas que valida el servidor:** correo único y válido; residente siempre con una casa activa; nadie puede cambiar su propio rol, suspenderse ni eliminarse; siempre debe quedar al menos un ADMIN activo. Filtrar campos permitidos (sin asignación masiva: el cliente no puede mandar `estado`, `hash` ni fechas).
+- **Contraseñas:** hash con Argon2id (o bcrypt) por el servidor; nunca se devuelven ni se registran en logs. La contraseña temporal se genera en el servidor con CSPRNG (≥ 12 caracteres), se devuelve una sola vez, vence en 72 h y obliga a crear una propia (`debeCambiar`): mientras tanto la sesión solo puede llamar `POST /api/auth/password`. Cambiar la propia pide la contraseña actual (excepto justo después de una temporal). Mínimo 10 caracteres, máximo 128, rechazar contraseñas comunes o filtradas.
+- **Sesiones:** suspender, restablecer contraseña, cerrar sesiones o cambiar rol/casa/correo **invalida en el servidor** todas las sesiones de esa cuenta (borrar sus sesiones o guardar `sesionesCerradasEn` y rechazar cookies emitidas antes). La app revisa `GET /api/auth/sesion` cada minuto y al volver a la pestaña; un 401 la saca al login.
+- **Login de cuenta suspendida:** responder el mensaje de suspensión solo si la contraseña es correcta (si no, el genérico) para no revelar qué cuentas existen.
+- **Casas:** la dirección (calle + número) no se edita porque pagos, accesos y anuncios quedan ligados a ella; se desactiva y se crea otra. No se puede desactivar una casa con residentes activos.
+- **Bitácora:** cada alta, cambio, suspensión, restablecimiento y cierre de sesiones se guarda con quién, cuándo e IP; es de solo lectura (sin UPDATE/DELETE para la app).
+- **Demo:** las cuentas viven en `localStorage` con hash SHA-256 (`olv:<id>:<contraseña>`); sirve para probar el flujo, no es seguridad real.
+
 ### 7c. Notificaciones push
 - Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
   push responde 404/410.

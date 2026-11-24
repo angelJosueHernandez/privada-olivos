@@ -17,6 +17,7 @@ export const SECCIONES: Partial<Record<Rol, Destino[]>> = {
     { ruta: '/admin/accesos', etiqueta: 'Accesos', icono: 'entrada' },
     { ruta: '/admin/pagos', etiqueta: 'Pagos', icono: 'pagos' },
     { ruta: '/admin/anuncios', etiqueta: 'Anuncios', icono: 'megafono' },
+    { ruta: '/admin/directorio', etiqueta: 'Directorio', icono: 'usuario' },
   ],
 }
 

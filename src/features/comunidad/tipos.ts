@@ -43,7 +43,6 @@ export type ValorRespuesta = 'ENTERADO' | 'ASISTE' | 'NO_ASISTE'
 export type Respuesta = { casa: string; valor: ValorRespuesta; personas?: number; por: Actor; en: Date }
 export const MAX_PERSONAS = 10
 
-export const CALLES = ['Palma', 'Encino', 'Olmo'] as const
 export const calleDe = (casa: string) => casa.replace(/^Calle\s+/i, '').replace(/\s+\d+.*$/, '')
 export const anuncioVigente = (a: Anuncio, ahora = Date.now()) => !a.vence || a.vence.getTime() > ahora
 export const anuncioPara = (a: Anuncio, casa: string) => !a.calle || calleDe(casa) === a.calle

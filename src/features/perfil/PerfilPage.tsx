@@ -8,6 +8,10 @@ import { ETIQUETA_ROL } from '../caseta/tipos'
 import { toast } from 'sonner'
 import { useEstadoAvisos } from '../../shared/avisos/sistema'
 import { useInstalar } from '../../shared/avisos/instalar'
+import Hoja from '../../shared/ui/Hoja'
+import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
+import { authService } from '../auth/authService'
+import { PASSWORD_MIN, revisarPassword } from '../directorio/tipos'
 
 const iniciales = (n: string) => n.split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase()
 
@@ -26,6 +30,62 @@ function Fila({ icono, etiqueta, children }: { icono: IconName; etiqueta: string
       <dt className="flex-1 text-[0.9375rem]">{etiqueta}</dt>
       <dd className="text-[0.9375rem] font-medium text-right text-texto/80 min-w-0 truncate">{children}</dd>
     </div>
+  )
+}
+
+const campoPass = 'block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento'
+
+/* Cambiar la contraseña propia: pide la actual para que nadie la cambie con el celular desbloqueado */
+function CambiarPassword() {
+  const { user } = useAuth()
+  const [abierto, setAbierto] = useState(false)
+  const [actual, setActual] = useState('')
+  const [nueva, setNueva] = useState('')
+  const [repetir, setRepetir] = useState('')
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const cerrar = () => { setAbierto(false); setActual(''); setNueva(''); setRepetir(''); setError('') }
+  useAtrasCierra(abierto, cerrar)
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || enviando) return
+    const falta = !actual ? 'Escribe tu contraseña actual.' : revisarPassword(nueva, user.email) || (nueva !== repetir ? 'Las contraseñas nuevas no coinciden.' : nueva === actual ? 'La nueva debe ser distinta a la actual.' : '')
+    if (falta) { setError(falta); return }
+    setError(''); setEnviando(true)
+    try { await authService.crearPassword(user, nueva, actual); toast.success('Contraseña actualizada'); cerrar() }
+    catch (err) { setError(err instanceof Error ? err.message : 'No se pudo cambiar') }
+    finally { setEnviando(false) }
+  }
+  return (
+    <>
+      <div className="flex items-center gap-3.5 px-4 min-h-[56px] py-2.5">
+        <span className="grid place-items-center h-9 w-9 shrink-0 rounded-[10px] bg-fondo text-texto/70"><Icon n="candado" size={18} /></span>
+        <dt className="flex-1 text-[0.9375rem]">Contraseña</dt>
+        <dd><button type="button" onClick={() => setAbierto(true)} className="min-h-11 px-1 text-[0.9375rem] font-medium text-acento">Cambiar</button></dd>
+      </div>
+      {abierto && (
+        <Hoja titulo="Cambiar contraseña" onCerrar={cerrar}
+          pie={<button type="submit" form="form-pass" disabled={enviando} className="btn-primario w-full">{enviando ? 'Guardando…' : 'Guardar contraseña'}</button>}>
+          <form id="form-pass" onSubmit={enviar} noValidate className="space-y-5">
+            <input type="email" autoComplete="username" value={user?.email ?? ''} readOnly hidden />
+            <div>
+              <label htmlFor="p-actual" className="mb-2 block text-[1rem] font-semibold">Contraseña actual</label>
+              <input id="p-actual" type="password" autoComplete="current-password" maxLength={128} value={actual} onChange={(e) => setActual(e.target.value)} className={campoPass} />
+            </div>
+            <div>
+              <label htmlFor="p-nueva" className="mb-2 block text-[1rem] font-semibold">Contraseña nueva</label>
+              <input id="p-nueva" type="password" autoComplete="new-password" maxLength={128} value={nueva} onChange={(e) => setNueva(e.target.value)} className={campoPass} aria-describedby="p-reglas" />
+              <p id="p-reglas" className="mt-1.5 px-1 text-[0.8125rem] text-suave">Al menos {PASSWORD_MIN} caracteres.</p>
+            </div>
+            <div>
+              <label htmlFor="p-repetir" className="mb-2 block text-[1rem] font-semibold">Repite la nueva</label>
+              <input id="p-repetir" type="password" autoComplete="new-password" maxLength={128} value={repetir} onChange={(e) => setRepetir(e.target.value)} className={campoPass} />
+            </div>
+            {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+          </form>
+        </Hoja>
+      )}
+    </>
   )
 }
 
@@ -100,6 +160,7 @@ export default function PerfilPage() {
             {inicioSesion ? inicioSesion.toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
           </Fila>
           <Fila icono="salir" etiqueta="Cierre por inactividad">{INACTIVIDAD_MIN[user.rol]} min</Fila>
+          <CambiarPassword />
         </Grupo>
 
         <Dispositivo />

@@ -1,23 +1,24 @@
 import { api, ErrorApi, hayApi } from '../../shared/api/cliente'
+import { directorioService } from '../directorio/directorioService'
+import type { Cuenta } from '../directorio/tipos'
 import { INACTIVIDAD_MIN } from './permisos'
 
 export type Rol = 'ADMIN' | 'RESIDENTE' | 'GUARDIA'
-export type Usuario = { id: string; nombre: string; rol: Rol; casa?: string; email?: string }
+export type Usuario = {
+  id: string; nombre: string; rol: Rol; casa?: string; email?: string
+  /** Entró con una contraseña temporal: antes de usar la app debe crear la suya */
+  debeCambiar?: boolean
+}
 
 /*
   Servicio de autenticación.
   - Con VITE_API_URL configurada habla con la API .NET (la sesión queda en una cookie HttpOnly).
   - Sin API corre en MODO DEMOSTRACIÓN. El demo NO es seguridad real: todo corre en el navegador.
-    Aun así, aquí solo viajan hashes SHA-256, para que las contraseñas no se lean en texto plano
-    en el JavaScript con las herramientas de desarrollador.
+    Aun así, las cuentas (en el directorio) solo guardan hashes SHA-256, para que las contraseñas
+    no se lean en texto plano con las herramientas de desarrollador.
 */
 export const MODO_DEMO = !hayApi
 
-const DEMO: Record<string, Usuario> = {
-  '06067b8d70f90d3cbc8bc09757b9816585699477405732ab821d3fb39147fdb3': { id: '1', nombre: 'Alejandro Garza', rol: 'ADMIN', email: 'admin@demo.mx' },
-  '422a5ba68a9a9ff0b77c72a99d82da60e324088f07d09ef3ba04f9ec7f0f2451': { id: 'u-res-2', nombre: 'María Treviño', rol: 'RESIDENTE', casa: 'Calle Palma 104', email: 'residente@demo.mx' },
-  '72c53fa3cd5ba5cf88b1b73ccc82ba26f4883211115c86e2590b05c8b73ae85e': { id: '3', nombre: 'Luis Herrera', rol: 'GUARDIA', email: 'guardia@demo.mx' },
-}
 const DEMO_2FA = '220f3d1e7e34b05aa0fdae94fb025f6edb9218a8fef6e1c639eb7003493d3239'
 
 async function sha256(texto: string): Promise<string> {
@@ -37,8 +38,10 @@ function validarUsuario(u: unknown): Usuario {
     id: x.id, nombre: x.nombre.slice(0, 120), rol: x.rol as Rol,
     casa: typeof x.casa === 'string' ? x.casa.slice(0, 120) : undefined,
     email: typeof x.email === 'string' ? x.email.slice(0, 254) : undefined,
+    debeCambiar: x.debeCambiar === true,
   }
 }
+const deCuenta = (c: Cuenta): Usuario => ({ id: c.id, nombre: c.nombre, rol: c.rol, casa: c.casa, email: c.email, debeCambiar: c.debeCambiar })
 
 const CLAVE_SESION = 'olv-sesion'
 function borrarSesionDemo() { try { sessionStorage.removeItem(CLAVE_SESION) } catch { /* nada */ } }
@@ -54,9 +57,7 @@ export const authService = {
     }
     if (MODO_DEMO) {
       await espera()
-      const usuario = DEMO[await sha256(`${email}:${password}`)]
-      if (!usuario) throw new Error('Correo o contraseña incorrectos.')
-      return { usuario, requiere2fa: true }
+      return { usuario: deCuenta(await directorioService.verificar(email, password)), requiere2fa: true }
     }
     try {
       const r = await api<{ usuario: unknown; requiere2fa: boolean }>('/api/auth/login', { metodo: 'POST', cuerpo: { email, password } })
@@ -101,15 +102,33 @@ export const authService = {
     try {
       const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? 'null') as { id?: unknown; inicio?: unknown; ultima?: unknown } | null
       if (!s || typeof s.id !== 'string' || typeof s.inicio !== 'number' || typeof s.ultima !== 'number') return null
-      const usuario = Object.values(DEMO).find((u) => u.id === s.id)
-      if (!usuario || Date.now() - s.ultima > INACTIVIDAD_MIN[usuario.rol] * 60_000) { borrarSesionDemo(); return null }
-      return { usuario, inicio: new Date(s.inicio) }
+      // La cuenta se toma del directorio: si la suspendieron o le cerraron las sesiones, no se recupera
+      const cuenta = directorioService.sesionVigente(s.id, new Date(s.inicio))
+      if (!cuenta || Date.now() - s.ultima > INACTIVIDAD_MIN[cuenta.rol] * 60_000) { borrarSesionDemo(); return null }
+      return { usuario: deCuenta(cuenta), inicio: new Date(s.inicio) }
     } catch { return null }
   },
   /** Demo: recuerda la sesión en esta pestaña (solo ID y horas) */
   recordar(usuario: Usuario, inicio: Date) {
     if (!MODO_DEMO) return
     try { sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ id: usuario.id, inicio: inicio.getTime(), ultima: Date.now() })) } catch { /* sin almacenamiento: solo en memoria */ }
+    directorioService.registrarAcceso(usuario.id)
+  },
+  /**
+   * ¿La administración sigue permitiendo esta sesión? (cuenta activa y sesiones no cerradas)
+   * Con API se pregunta al servidor; en demo, al directorio de este navegador.
+   */
+  async sesionVigente(usuario: Usuario, inicio: Date): Promise<boolean> {
+    if (!MODO_DEMO) {
+      try { await api('/api/auth/sesion'); return true }
+      catch (e) { return !(e instanceof ErrorApi && (e.estado === 401 || e.estado === 403)) } // sin red: no se saca a nadie
+    }
+    return directorioService.sesionVigente(usuario.id, inicio) !== null
+  },
+  /** La persona crea su propia contraseña (obligatorio después de una temporal) */
+  async crearPassword(usuario: Usuario, nueva: string, actual?: string): Promise<void> {
+    if (nueva.length > LIMITES.password || (actual?.length ?? 0) > LIMITES.password) throw new Error('Es demasiado larga (máximo 128).')
+    await directorioService.cambiarPassword(usuario.id, nueva, actual)
   },
   /** Demo: anota la última actividad para que la sesión recuperada respete la inactividad */
   marcarActividad() {

@@ -7,11 +7,11 @@ import { Opciones } from '../../shared/ui/Opciones'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Vacio from '../../shared/ui/Vacio'
 import { useAuth } from '../auth/AuthContext'
-import { CASAS } from '../caseta/casetaService'
+import { directorioService } from '../directorio/directorioService'
 import type { Actor } from '../caseta/tipos'
 import { comunidadService } from '../comunidad/comunidadService'
 import ListaAnuncios, { contarRespuestas } from '../comunidad/ListaAnuncios'
-import { Anuncio, anuncioPara, anuncioVigente, CALLES, CATEGORIAS, CategoriaAnuncio, fechaLocal, NuevoAnuncio, TipoRespuesta } from '../comunidad/tipos'
+import { Anuncio, anuncioPara, anuncioVigente, CATEGORIAS, CategoriaAnuncio, fechaLocal, NuevoAnuncio, TipoRespuesta } from '../comunidad/tipos'
 
 const FORM = 'anuncio'
 const campo = 'block w-full rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-texto/40'
@@ -159,7 +159,7 @@ function FormAnuncio({ inicial, onGuardar }: { inicial?: Anuncio; onGuardar: (d:
       <div className="anim-entrar" style={{ animationDelay: '120ms' }}>
         <h3 className="mb-3 text-[1.0625rem] font-semibold">¿Para quién?</h3>
         <Opciones etiqueta="Destinatarios" valor={calle} opcional={false} onCambio={(v) => v && setCalle(v)}
-          opciones={[{ valor: 'TODAS', etiqueta: 'Todas las casas' }, ...CALLES.map((c) => ({ valor: c as string, etiqueta: `Calle ${c}` }))]} />
+          opciones={[{ valor: 'TODAS', etiqueta: 'Todas las casas' }, ...directorioService.calles().map((c) => ({ valor: c, etiqueta: `Calle ${c}` }))]} />
       </div>
       <div className="anim-entrar" style={{ animationDelay: '160ms' }}>
         <h3 className="mb-3 text-[1.0625rem] font-semibold">¿Hasta cuándo se muestra?</h3>
@@ -206,7 +206,7 @@ function RespuestasPorCasa({ anuncio: a }: { anuncio: Anuncio }) {
   const [enviando, setEnviando] = useState(false)
   const t = contarRespuestas(a)
   const porCasa = new Map((a.respuestas ?? []).map((r) => [r.casa, r]))
-  const destino = CASAS.filter((c) => anuncioPara(a, c))
+  const destino = directorioService.casasActivas().filter((c) => anuncioPara(a, c))
   const faltan = destino.filter((c) => !porCasa.has(c))
   const si = (a.respuestas ?? []).filter((r) => r.valor !== 'NO_ASISTE').sort((x, y) => y.en.getTime() - x.en.getTime())
   const no = (a.respuestas ?? []).filter((r) => r.valor === 'NO_ASISTE').sort((x, y) => y.en.getTime() - x.en.getTime())

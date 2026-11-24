@@ -22,10 +22,10 @@ export default function AppShell() {
     <div className="min-h-dvh flex flex-col">
       <header className="material sticky top-0 z-20 border-b border-texto/[0.08] pt-[env(safe-area-inset-top)]">
         <div className="mx-auto w-full max-w-5xl h-14 px-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 lg:shrink-0">
             <Marca size={30} />
             <div className="min-w-0 leading-tight">
-              <p className="text-[0.9375rem] font-semibold tracking-[-0.01em]">Los Olivos</p>
+              <p className="text-[0.9375rem] font-semibold tracking-[-0.01em] whitespace-nowrap">Los Olivos</p>
               <p className="text-[0.75rem] text-suave truncate">
                 {ETIQUETA[user.rol]}{user.casa ? ` · ${user.casa}` : ''}
               </p>
@@ -34,16 +34,16 @@ export default function AppShell() {
           <PestanasSuperiores rol={user.rol} />
           <div className="flex items-center gap-2">
             <Link to="/perfil" aria-label={`Mi perfil: ${user.nombre}`}
-              className="flex items-center gap-2.5 rounded-full pr-1 sm:pr-3 text-[0.875rem] text-suave hover:bg-texto/[0.05] transition-colors">
+              className="flex items-center gap-2.5 rounded-full pr-1 sm:pr-3 lg:max-[1440px]:pr-1 text-[0.875rem] text-suave hover:bg-texto/[0.05] transition-colors">
               <span aria-hidden="true" className="grid place-items-center h-9 w-9 rounded-full bg-acento/15 text-acento text-[0.75rem] font-semibold">
                 {iniciales(user.nombre)}
               </span>
-              <span className="hidden sm:inline">{user.nombre}</span>
+              <span className="hidden sm:inline whitespace-nowrap lg:max-[1440px]:hidden">{user.nombre}</span>
             </Link>
             <button onClick={logout} aria-label="Cerrar sesión"
-              className="btn-secundario btn-chico whitespace-nowrap max-sm:w-11 max-sm:h-11 max-sm:px-0">
+              className="btn-secundario btn-chico whitespace-nowrap max-sm:w-11 max-sm:h-11 max-sm:px-0 lg:max-[1440px]:w-11 lg:max-[1440px]:h-11 lg:max-[1440px]:px-0">
               <Icon n="salir" size={18} />
-              <span className="max-sm:sr-only">Cerrar sesión</span>
+              <span className="max-sm:sr-only lg:max-[1440px]:sr-only">Cerrar sesión</span>
             </button>
           </div>
         </div>

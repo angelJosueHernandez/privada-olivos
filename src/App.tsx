@@ -17,6 +17,8 @@ import TerminosPage from './features/legal/TerminosPage'
 import CookiesPage from './features/legal/CookiesPage'
 import AvisoCookies from './features/legal/AvisoCookies'
 import PerfilPage from './features/perfil/PerfilPage'
+import CrearPassword from './features/auth/CrearPassword'
+import AdminDirectorio from './features/admin/AdminDirectorio'
 
 export default function App() {
   const { user, listo } = useAuth()
@@ -24,6 +26,8 @@ export default function App() {
   if (!listo) return <div className="min-h-dvh bg-fondo" aria-busy="true" />
   return (
     <>
+      {/* Con contraseña temporal no se entra a ninguna pantalla hasta crear la propia */}
+      {user?.debeCambiar ? <CrearPassword /> : (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         {/* Documentos legales: públicos, sin sesión */}
@@ -39,10 +43,12 @@ export default function App() {
           <Route path="/admin/accesos" element={<RequireRole rol="ADMIN"><AdminAccesos /></RequireRole>} />
           <Route path="/admin/pagos" element={<RequireRole rol="ADMIN"><AdminPagos /></RequireRole>} />
           <Route path="/admin/anuncios" element={<RequireRole rol="ADMIN"><AdminAnuncios /></RequireRole>} />
+          <Route path="/admin/directorio" element={<RequireRole rol="ADMIN"><AdminDirectorio /></RequireRole>} />
           <Route path="/perfil" element={<RequireRole><PerfilPage /></RequireRole>} />
         </Route>
         <Route path="*" element={<Navigate to={user ? rutaInicio(user.rol) : '/login'} replace />} />
       </Routes>
+      )}
       <AvisoCookies />
       {/* Notificaciones (Sonner): arriba al centro, lejos del pulgar y del aviso de cookies */}
       <Toaster position="top-center" richColors closeButton duration={3500}

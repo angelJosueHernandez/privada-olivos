@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { CASAS } from './casetaService'
+import { directorioService } from '../directorio/directorioService'
 
-const CALLES = ['Palma', 'Encino', 'Olmo']
-const numeros = (calle: string) => CASAS.filter((c) => c.startsWith(`Calle ${calle} `)).map((c) => c.split(' ').pop()!)
+const numeros = (calle: string) => directorioService.casasActivas().filter((c) => c.startsWith(`Calle ${calle} `)).map((c) => c.slice(`Calle ${calle} `.length))
 
 /* Casa destino en dos toques: calle y número. Sin escribir, sin errores de dedo. */
 export default function SelectorCasa({ valor, onCambio }: { valor: string; onCambio: (casa: string) => void }) {
+  // Calles y casas vienen del directorio (la administración las da de alta)
+  const CALLES = directorioService.calles()
   const [calle, setCalle] = useState(() => CALLES.find((c) => valor.startsWith(`Calle ${c} `)) ?? CALLES[0])
 
   // Si la casa cambia desde fuera (p. ej. al reconocer una placa), se muestra su calle
@@ -16,10 +17,10 @@ export default function SelectorCasa({ valor, onCambio }: { valor: string; onCam
 
   return (
     <div className="space-y-3">
-      <div role="group" aria-label="Calle" className="grid grid-cols-3 gap-1 rounded-[14px] bg-texto/[0.06] p-1">
+      <div role="group" aria-label="Calle" className="flex gap-1 overflow-x-auto rounded-[14px] bg-texto/[0.06] p-1 [scrollbar-width:none]">
         {CALLES.map((c) => (
           <button key={c} type="button" aria-pressed={calle === c} onClick={() => setCalle(c)}
-            className={`h-11 rounded-[11px] text-[0.9375rem] font-medium transition-[background-color,box-shadow,color] duration-150
+            className={`h-11 flex-1 shrink-0 whitespace-nowrap px-3 rounded-[11px] text-[0.9375rem] font-medium transition-[background-color,box-shadow,color] duration-150
               ${calle === c ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>
             {c}
           </button>
