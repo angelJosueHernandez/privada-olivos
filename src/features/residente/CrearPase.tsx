@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 import { Opciones } from '../../shared/ui/Opciones'
 import Icon from '../../shared/ui/Icon'
-import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { CAMPO_INVALIDO, ErrorFormulario, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
 import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { DiaPase, HORARIOS, HorarioPase, MOTIVOS, NuevoPase } from '../caseta/tipos'
 
@@ -19,7 +19,7 @@ function Seccion({ titulo, nota, children, retraso = 0 }: { titulo: string; nota
 }
 
 const campo = 'block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none ' +
-  'transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-texto/40'
+  'transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-suave'
 
 /** Horarios que todavía sirven hoy (no se ofrece "Mañana 8–14" si ya son las 15:00) */
 const horariosDisponibles = (dia: DiaPase) => {
@@ -52,8 +52,9 @@ export default function CrearPase({ idFormulario, onCrear }: { idFormulario: str
     e.preventDefault()
     const nombre = visitante.trim()
     const placa = placas.replace(/-$/, '')
-    const falta = v.revisar() || (!horario ? 'Elige el horario.' : '')
-    if (falta) { setError(falta); toast.error(falta); return }
+    setError('')
+    if (v.revisar()) return
+    if (!horario) { setError('Elige el horario.'); return }
     setError('')
     await onCrear({
       visitante: nombre.slice(0, 80), motivo: motivo ?? undefined, dia, horario: horario!,
@@ -113,7 +114,7 @@ export default function CrearPase({ idFormulario, onCrear }: { idFormulario: str
         )}
       </Seccion>
 
-      {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+      <ErrorFormulario mensaje={error} />
     </form>
   )
 }

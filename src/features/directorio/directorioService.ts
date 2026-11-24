@@ -32,16 +32,25 @@ type Secretos = {
   codigoDemo?: boolean
 }
 type CuentaGuardada = Omit<Cuenta, 'dosPasos'> & Secretos
-const DEMO_2FA = '220f3d1e7e34b05aa0fdae94fb025f6edb9218a8fef6e1c639eb7003493d3239'
+const DEMO_2FA = 'bdaef4e0619ea6bb85555aff329def13b8ebf066483911741aa5c5929b293063'
 type EstadoDemo = { casas: Casa[]; cuentas: CuentaGuardada[]; cambios: Cambio[] }
-const CLAVE = 'olv-directorio-v2'
+const CLAVE = 'olv-directorio-v3'
 
-async function sha256(texto: string): Promise<string> {
-  const datos = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto))
-  return Array.from(new Uint8Array(datos), (b) => b.toString(16).padStart(2, '0')).join('')
+/*
+  PBKDF2-SHA256 con 210 000 iteraciones (recomendación OWASP). Aunque alguien copie el hash del
+  código o del almacenamiento, cada intento de adivinar la contraseña le cuesta ~0.1 s, en lugar de
+  los microsegundos de un SHA-256 simple. En producción el servidor usa Argon2id; esto es solo el demo.
+*/
+const ITERACIONES = 210_000
+async function pbkdf2(secreto: string, sal: string): Promise<string> {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(secreto), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(sal), iterations: ITERACIONES }, base, 256)
+  return Array.from(new Uint8Array(bits), (b) => b.toString(16).padStart(2, '0')).join('')
 }
-/** El hash depende del ID (no del correo) para poder cambiar el correo sin perder la contraseña */
-const hashDe = (id: string, password: string) => sha256(`olv:${id}:${password}`)
+/** La sal incluye el ID (no el correo) para poder cambiar el correo sin perder la contraseña */
+const hashDe = (id: string, password: string) => pbkdf2(password, `olv:${id}`)
+/** Comparación en tiempo constante: no revela cuántos caracteres coinciden */
+const iguales = (a: string, b: string) => a.length === b.length && [...a].reduce((d, c, k) => d | (c.charCodeAt(0) ^ b.charCodeAt(k)), 0) === 0
 
 /** Contraseña temporal legible (sin 0/O ni 1/l/I) con 12 caracteres aleatorios */
 function generarTemporal(): string {
@@ -65,9 +74,9 @@ function semilla(): EstadoDemo {
   const base = { estado: 'ACTIVA' as const, debeCambiar: false, creadoEn: inicio, codigoDemo: true }
   const cuentas: CuentaGuardada[] = [
     // Cuentas de prueba (las mismas contraseñas de siempre; aquí solo vive su hash)
-    { ...base, id: '1', nombre: 'Alejandro Garza', email: 'admin@demo.mx', telefono: '8112345678', rol: 'ADMIN', tieneAcceso: true, ultimoAcceso: hace(0, 9), hash: '54d8f5b739c1a85b05c79b7ea1a2819729f0cddc4d798a07e3dbf7e3b0c50168' },
-    { ...base, id: 'u-res-2', nombre: 'María Treviño', email: 'residente@demo.mx', telefono: '8187654321', rol: 'RESIDENTE', casa: 'Calle Palma 104', tieneAcceso: true, ultimoAcceso: hace(1, 20), hash: '3b26247b7c3b0ecf51168738ee9777454f41352ede3539fd31416c40c932c00f' },
-    { ...base, id: '3', nombre: 'Luis Herrera', email: 'guardia@demo.mx', telefono: '8111122233', rol: 'GUARDIA', tieneAcceso: true, ultimoAcceso: hace(0, 7), hash: '97f75137c5ca6cf24142d22ab1badcabff242f7c1a13a0c3c32e27c50cd3fba3' },
+    { ...base, id: '1', nombre: 'Alejandro Garza', email: 'admin@demo.mx', telefono: '8112345678', rol: 'ADMIN', tieneAcceso: true, ultimoAcceso: hace(0, 9), hash: 'ae8d74e3328bc6bc7f8bd1f4e4d247218ba4bbe96cffb556e7111cd81b655703' },
+    { ...base, id: 'u-res-2', nombre: 'María Treviño', email: 'residente@demo.mx', telefono: '8187654321', rol: 'RESIDENTE', casa: 'Calle Palma 104', tieneAcceso: true, ultimoAcceso: hace(1, 20), hash: '376b8c658ef7dd8057f900d15f68fc894a8677e070e06d89e28c0a109a7bdd8a' },
+    { ...base, id: '3', nombre: 'Luis Herrera', email: 'guardia@demo.mx', telefono: '8111122233', rol: 'GUARDIA', tieneAcceso: true, ultimoAcceso: hace(0, 7), hash: '03be29f5f6e7e74d8455fcf9a7553ff240ff88046949fb13c8d79f3df329d4e3' },
     // Otras personas del directorio (sin contraseña conocida: para probar "Generar contraseña")
     { ...base, id: 'u-res-7', nombre: 'Jorge Salinas', email: 'jorge.salinas@ejemplo.mx', telefono: '8123456789', rol: 'RESIDENTE', casa: 'Calle Encino 212', tieneAcceso: true, ultimoAcceso: hace(2, 21) },
     { ...base, id: 'u-res-9', nombre: 'Laura Rocha', email: 'laura.rocha@ejemplo.mx', rol: 'RESIDENTE', casa: 'Calle Olmo 303', tieneAcceso: true, ultimoAcceso: hace(1, 16) },
@@ -166,7 +175,7 @@ export const directorioService = {
   async verificar(email: string, password: string): Promise<Cuenta> {
     const c = demo.cuentas.find((x) => x.email === email)
     const hash = await hashDe(c?.id ?? 'nadie', password) // se calcula siempre: mismo tiempo exista o no
-    if (!c || !c.hash || c.hash !== hash) throw new Error('Correo o contraseña incorrectos.')
+    if (!c || !c.hash || !iguales(c.hash, hash)) throw new Error('Correo o contraseña incorrectos.')
     if (c.estado === 'SUSPENDIDA') throw new Error('Tu cuenta está suspendida. Comunícate con la administración.')
     if (c.debeCambiar && c.temporalVence && c.temporalVence.getTime() < Date.now()) throw new Error('Tu contraseña temporal venció. Pide una nueva a la administración.')
     return publica(c)
@@ -192,8 +201,7 @@ export const directorioService = {
       actualizar(id, { totpUltimo: usado }); guardar()
       return
     }
-    const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`2fa:${codigo}`))), (b) => b.toString(16).padStart(2, '0')).join('')
-    if (!c.codigoDemo || h !== DEMO_2FA) throw new Error('El código no es correcto. Revisa tu app de autenticación.')
+    if (!c.codigoDemo || !iguales(await pbkdf2(codigo, 'olv:2fa'), DEMO_2FA)) throw new Error('El código no es correcto. Revisa tu app de autenticación.')
   },
   /** Genera un secreto nuevo (pendiente hasta confirmarlo con un código) */
   iniciar2fa(id: string): { secreto: string; uri: string } {
@@ -225,7 +233,7 @@ export const directorioService = {
     if (hayApi) return api<void>('/api/auth/password', { metodo: 'POST', cuerpo: { actual, nueva } })
     await espera()
     const c = buscar(id)
-    if (!c.debeCambiar && (!actual || (await hashDe(id, actual)) !== c.hash)) throw new Error('Tu contraseña actual no es correcta.')
+    if (!c.debeCambiar && (!actual || !c.hash || !iguales(await hashDe(id, actual), c.hash))) throw new Error('Tu contraseña actual no es correcta.')
     const error = revisarPassword(nueva, c.email)
     if (error) throw new Error(error)
     const hash = await hashDe(id, nueva)

@@ -6,7 +6,7 @@ import FotosGuiadas, { ApartadoFoto, FotoEvidencia, GUIAS, guiasPara } from './F
 import LectorPlaca from './LectorPlaca'
 import LogoEmpresa from './LogoEmpresa'
 import SelectorCasa from './SelectorCasa'
-import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { CAMPO_INVALIDO, ErrorFormulario, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
 import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { casetaService } from './casetaService'
 import {
@@ -131,13 +131,13 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
     e.preventDefault()
     if (paso === 'fotos') {
       const falta = !vehiculo ? 'Elige cómo llegó.' : faltanObligatorias.length ? `Falta la foto de ${faltanObligatorias.join(', ')}.` : ''
-      if (falta) { setError(falta); toast.error(falta); return }
+      if (falta) { setError(falta); return }
       setPaso('datos')
       return
     }
     const quien = esVisita ? nombre.trim() : empresa === OTRA ? otraEmpresa.trim() : empresa
-    const falta = v.revisar()
-    if (falta) { setError(falta); toast.error(falta); return }
+    setError('')
+    if (v.revisar()) return
     setError('')
     // Solo se envían las fotos que aplican al tipo y vehículo elegidos
     const enviar = fotos.filter((f) => (f.slot === 'placa' ? conPlaca : guias.some((g) => g.id === f.slot)))
@@ -276,7 +276,7 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
           )}
 
           <Seccion titulo="Casa destino" retraso={120} extra={casa && <span className="anim-llenar text-[0.9375rem] font-medium text-acento">{casa}</span>}>
-            <SelectorCasa valor={casa} onCambio={setCasa} />
+            <SelectorCasa valor={casa} onCambio={(c) => { setCasa(c); setError('') }} />
             <MensajeCampo id={v.idError('casa')} mensaje={v.error('casa')} />
           </Seccion>
 
@@ -306,11 +306,7 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
         </div>
       )}
 
-      {error && (
-        <p role="alert" className="mt-6 flex items-start gap-2 text-[0.9375rem] text-peligro">
-          <span className="mt-0.5 shrink-0"><Icon n="alerta" size={18} /></span>{error}
-        </p>
-      )}
+      <div className="mt-6"><ErrorFormulario mensaje={error} /></div>
     </form>
   )
 }

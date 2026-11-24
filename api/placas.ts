@@ -65,8 +65,12 @@ function limitar(ip: string): boolean {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  if (!process.env.ANTHROPIC_API_KEY) return json({ error: 'no-configurado' }, 503)
+  // Primero el origen: a quien llega de fuera no se le dice ni si la función está configurada
   if (!origenPermitido(req)) return json({ error: 'origen' }, 403)
+  // Los navegadores mandan Sec-Fetch-Site; si viene y no es del mismo sitio, se rechaza
+  const sitio = req.headers.get('sec-fetch-site')
+  if (sitio && sitio !== 'same-origin') return json({ error: 'origen' }, 403)
+  if (!process.env.ANTHROPIC_API_KEY) return json({ error: 'no-configurado' }, 503)
   if (!(req.headers.get('content-type') ?? '').includes('application/json')) return json({ error: 'formato' }, 415)
 
   const ip = (req.headers.get('x-forwarded-for') ?? 'desconocida').split(',')[0].trim()
@@ -88,7 +92,7 @@ export async function POST(req: Request): Promise<Response> {
     // No tiene respaldo automático (fallbacks); si rechaza la imagen se responde "no se leyó".
     const respuesta = await client.messages.create({
       model: 'claude-haiku-5-5',
-      max_tokens: 4000,
+      max_tokens: 400, // la respuesta es un JSON corto: tope bajo para que un abuso cueste poco
       output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA } },
       system: SISTEMA,
       messages: [{

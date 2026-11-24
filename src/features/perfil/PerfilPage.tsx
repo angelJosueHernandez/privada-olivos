@@ -12,6 +12,7 @@ import Hoja from '../../shared/ui/Hoja'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import { authService } from '../auth/authService'
 import { PASSWORD_MIN, revisarPassword } from '../directorio/tipos'
+import { ErrorFormulario } from '../../shared/ui/useValidacion'
 import ConfigurarAutenticador from '../auth/ConfigurarAutenticador'
 
 const iniciales = (n: string) => n.split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase()
@@ -112,7 +113,7 @@ function CambiarPassword() {
               <label htmlFor="p-repetir" className="mb-2 block text-[1rem] font-semibold">Repite la nueva</label>
               <input id="p-repetir" type="password" autoComplete="new-password" maxLength={128} value={repetir} onChange={(e) => setRepetir(e.target.value)} className={campoPass} />
             </div>
-            {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+            <ErrorFormulario mensaje={error} />
           </form>
         </Hoja>
       )}

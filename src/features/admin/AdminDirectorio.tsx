@@ -6,7 +6,7 @@ import Icon, { IconName } from '../../shared/ui/Icon'
 import { Opciones } from '../../shared/ui/Opciones'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Vacio from '../../shared/ui/Vacio'
-import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { CAMPO_INVALIDO, ErrorFormulario, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
 import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { useAuth } from '../auth/AuthContext'
 import type { Rol } from '../auth/authService'
@@ -38,7 +38,7 @@ const haceCuanto = (d?: Date) => {
   return dias < 30 ? `Hace ${dias} ${dias === 1 ? 'día' : 'días'}` : `El ${fecha(d)}`
 }
 const ICONO_ROL: Record<Rol, IconName> = { ADMIN: 'candado', RESIDENTE: 'inicio', GUARDIA: 'caseta' }
-const campo = 'block w-full rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-texto/40'
+const campo = 'block w-full rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-suave'
 
 /** Etiqueta de estado de acceso de una cuenta */
 function estadoAcceso(c: Cuenta): { t: string; c: string } | null {
@@ -57,6 +57,9 @@ export default function AdminDirectorio() {
   const [casas, setCasas] = useState<Casa[]>([])
   const [cambios, setCambios] = useState<Cambio[]>([])
   const [hoja, setHoja] = useState<HojaAbierta | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  /** Envuelve un guardado para que el botón de la hoja muestre que está trabajando */
+  const conCarga = <T,>(f: (d: T) => Promise<void>) => async (d: T) => { setGuardando(true); try { await f(d) } finally { setGuardando(false) } }
 
   const cargar = useCallback(async () => {
     try {
@@ -80,7 +83,7 @@ export default function AdminDirectorio() {
     contenidoHoja = {
       titulo: inicial ? 'Editar usuario' : 'Nuevo usuario',
       cuerpo: <FormCuenta inicial={inicial} casaInicial={hoja.t === 'nueva-cuenta' ? hoja.casa : undefined} esYo={inicial?.id === actor.id}
-        onGuardar={async (d) => {
+        onGuardar={conCarga(async (d: DatosCuenta) => {
           if (inicial) {
             await directorioService.editarCuenta(inicial.id, d, actor)
             toast.success('Datos actualizados')
@@ -89,8 +92,8 @@ export default function AdminDirectorio() {
             const r = await directorioService.crearCuenta(d, actor)
             setHoja({ t: 'temporal', nombre: r.cuenta.nombre, email: r.cuenta.email, temporal: r.temporal })
           }
-        }} />,
-      pie: <button type="submit" form="form-cuenta" className="btn-primario w-full">{inicial ? 'Guardar cambios' : 'Crear y generar acceso'}</button>,
+        })} />,
+      pie: <button type="submit" form="form-cuenta" disabled={guardando} className="btn-primario w-full">{guardando ? 'Guardando…' : inicial ? 'Guardar cambios' : 'Crear y generar acceso'}</button>,
     }
   } else if (hoja?.t === 'temporal') {
     contenidoHoja = { titulo: 'Acceso listo', cuerpo: <PasswordTemporal {...hoja} />, pie: <button type="button" onClick={cerrar} className="btn-primario w-full">Listo</button> }
@@ -100,8 +103,8 @@ export default function AdminDirectorio() {
   } else if (hoja?.t === 'nueva-casa') {
     contenidoHoja = {
       titulo: 'Nueva casa',
-      cuerpo: <FormCasa onGuardar={async (d) => { const casa = await directorioService.crearCasa(d, actor); toast.success('Casa dada de alta', { description: `${nombreCasa(casa)} ya aparece en caseta, anuncios y cobranza.` }); setHoja({ t: 'casa', id: casa.id }) }} />,
-      pie: <button type="submit" form="form-casa" className="btn-primario w-full">Dar de alta</button>,
+      cuerpo: <FormCasa onGuardar={conCarga(async (d: { calle: string; numero: string; notas?: string }) => { const casa = await directorioService.crearCasa(d, actor); toast.success('Casa dada de alta', { description: `${nombreCasa(casa)} ya aparece en caseta, anuncios y cobranza.` }); setHoja({ t: 'casa', id: casa.id }) })} />,
+      pie: <button type="submit" form="form-casa" disabled={guardando} className="btn-primario w-full">{guardando ? 'Guardando…' : 'Dar de alta'}</button>,
     }
   }
 
@@ -162,7 +165,7 @@ function ListaCuentas({ cuentas, yo, onAbrir }: { cuentas: Cuenta[]; yo: string;
           <span className="sr-only">Buscar usuario</span>
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-texto/45"><Icon n="buscar" size={18} /></span>
           <input type="search" value={q} onChange={(e) => setQ(filtrar.linea(e.target.value, LARGO.busqueda))} maxLength={LARGO.busqueda} placeholder="Buscar nombre, correo o casa"
-            className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-texto/45" />
+            className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-suave" />
         </label>
         <Opciones etiqueta="Filtrar" valor={filtro} onCambio={setFiltro}
           cuadricula="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&>*]:shrink-0 [&>*]:whitespace-nowrap sm:mx-0 sm:flex-wrap sm:px-0"
@@ -214,7 +217,7 @@ function ListaCasas({ casas, cuentas, onAbrir }: { casas: Casa[]; cuentas: Cuent
           <span className="sr-only">Buscar casa</span>
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-texto/45"><Icon n="buscar" size={18} /></span>
           <input type="search" value={q} onChange={(e) => setQ(filtrar.linea(e.target.value, 40))} maxLength={40} placeholder="Buscar calle o número"
-            className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-texto/45" />
+            className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-suave" />
         </label>
         {hayInactivas && (
           <button type="button" aria-pressed={inactivas} onClick={() => setInactivas(!inactivas)}
@@ -468,10 +471,19 @@ function FormCuenta({ inicial, casaInicial, esYo, onGuardar }: { inicial?: Cuent
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
     if (enviando) return
-    if (v.revisar()) { setError('Revisa los campos marcados.'); return }
-    setError(''); setEnviando(true)
+    setError('')
+    if (v.revisar()) return
+    setEnviando(true)
     try { await onGuardar({ nombre: nombre.trim(), email, telefono: telefono || undefined, rol, casa: rol === 'RESIDENTE' ? casa : undefined }) }
-    catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar') }
+    catch (err) {
+      // El error se muestra en el campo al que se refiere (y la vista se mueve ahí)
+      const m = err instanceof Error ? err.message : 'No se pudo guardar'
+      if (/correo/i.test(m)) v.fallo('email', m)
+      else if (/nombre/i.test(m)) v.fallo('nombre', m)
+      else if (/tel[eé]fono/i.test(m)) v.fallo('telefono', m)
+      else if (/casa/i.test(m)) v.fallo('casa', m)
+      else setError(m)
+    }
     finally { setEnviando(false) }
   }
   return (
@@ -506,12 +518,12 @@ function FormCuenta({ inicial, casaInicial, esYo, onGuardar }: { inicial?: Cuent
       {rol === 'RESIDENTE' && (
         <div className="anim-llenar">
           <h3 className="mb-3 text-[1.0625rem] font-semibold">Casa {casa && <span className="font-normal text-suave">· {casa}</span>}</h3>
-          <SelectorCasa valor={casa} onCambio={setCasa} />
+          <SelectorCasa valor={casa} onCambio={(c) => { setCasa(c); v.limpiar('casa') }} />
           <MensajeCampo id={v.idError('casa')} mensaje={v.error('casa')} />
         </div>
       )}
       {delicado && <p className="rounded-[14px] bg-alerta/[0.1] px-4 py-3 text-[0.875rem] text-texto/85">Al cambiar rol, casa o correo se cerrará su sesión para que entre con los permisos nuevos.</p>}
-      {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+      <ErrorFormulario mensaje={error} />
     </form>
   )
 }
@@ -533,10 +545,16 @@ function FormCasa({ onGuardar }: { onGuardar: (d: { calle: string; numero: strin
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
     if (enviando) return
-    if (v.revisar()) { setError('Revisa los campos marcados.'); return }
-    setError(''); setEnviando(true)
+    setError('')
+    if (v.revisar()) return
+    setEnviando(true)
     try { await onGuardar({ calle: nombreCalle, numero, notas: notas.trim() }) }
-    catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar') }
+    catch (err) {
+      const m = err instanceof Error ? err.message : 'No se pudo guardar'
+      if (/calle/i.test(m) && calle === 'OTRA') v.fallo('calle', m)
+      else if (/n[uú]mero|casa/i.test(m)) v.fallo('numero', m)
+      else setError(m)
+    }
     finally { setEnviando(false) }
   }
   return (
@@ -565,7 +583,7 @@ function FormCasa({ onGuardar }: { onGuardar: (d: { calle: string; numero: strin
         <textarea id="casa-notas" value={notas} onChange={(e) => setNotas(filtrar.texto(e.target.value, LARGO.notaCorta))} maxLength={LARGO.notaCorta} rows={3} className={`${campo} py-3 resize-y`} placeholder="Ej. Casa en renta, esquina con área verde" />
         <p className="mt-1 px-1 text-right text-[0.8125rem] text-suave cifras">{notas.length}/{LARGO.notaCorta}</p>
       </div>
-      {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+      <ErrorFormulario mensaje={error} />
     </form>
   )
 }

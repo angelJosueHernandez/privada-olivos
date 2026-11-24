@@ -6,6 +6,9 @@ import Icon from './Icon'
   Hoja a pantalla completa (estilo iOS) para tareas enfocadas: escanear, ver un resultado, registrar.
   Entra desde abajo; se cierra con el botón o con Escape; bloquea el scroll del fondo y lleva el foco al título.
 */
+/** Cuántas hojas hay abiertas (si se encadenan, la app sigue inerte hasta cerrar la última) */
+let hojasAbiertas = 0
+
 export default function Hoja({ titulo, onCerrar, oscura = false, children, pie }: {
   titulo: string
   onCerrar: () => void
@@ -22,12 +25,17 @@ export default function Hoja({ titulo, onCerrar, oscura = false, children, pie }
     const anterior = document.activeElement as HTMLElement | null
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // La app de fondo queda inerte: Tab y el lector de pantalla no salen de la hoja
+    const raiz = document.getElementById('root')
+    hojasAbiertas++
+    raiz?.setAttribute('inert', '')
     tituloRef.current?.focus()
     const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrar.current() }
     window.addEventListener('keydown', tecla)
     return () => {
       window.removeEventListener('keydown', tecla)
       document.body.style.overflow = overflow
+      if (--hojasAbiertas === 0) raiz?.removeAttribute('inert')
       anterior?.focus?.()
     }
   }, [])

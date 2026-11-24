@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 import { toast } from 'sonner'
 import Icon from '../../shared/ui/Icon'
 import { PASSWORD_MIN, revisarPassword } from '../directorio/tipos'
+import { ErrorFormulario } from '../../shared/ui/useValidacion'
 import { useAuth } from './AuthContext'
 
 const campo = 'block w-full h-14 rounded-[14px] bg-panel pl-4 pr-14 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento'
@@ -59,7 +60,7 @@ export default function CrearPassword() {
             <input id="repetir" type={ver ? 'text' : 'password'} autoComplete="new-password" value={repetir} maxLength={128}
               onChange={(e) => setRepetir(e.target.value)} className={campo} />
           </div>
-          {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+          <ErrorFormulario mensaje={error} />
           <button type="submit" disabled={enviando} className="btn-primario w-full">{enviando ? 'Guardando…' : 'Guardar y entrar'}</button>
         </form>
         <button type="button" onClick={logout} className="mt-4 w-full min-h-11 text-[0.9375rem] font-medium text-acento">Salir</button>

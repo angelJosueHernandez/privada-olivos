@@ -124,7 +124,7 @@ export default function LectorPlaca({ placa, onPlaca, onLectura }: {
           <input id="placa-manual" value={placa} maxLength={LARGO.placa} aria-invalid={placa && validar.placa(placa) ? true : undefined} aria-describedby="placa-ayuda" autoComplete="off" autoCapitalize="characters" spellCheck={false}
             onChange={(e) => onPlaca(filtrar.placa(e.target.value))}
             placeholder="ABC-123-D"
-            className="block w-full max-w-[260px] h-14 rounded-[14px] bg-panel px-4 text-[1.375rem] font-bold tracking-[0.08em] text-texto ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave/60 placeholder:font-medium aria-[invalid=true]:ring-alerta" />
+            className="block w-full max-w-[260px] h-14 rounded-[14px] bg-panel px-4 text-[1.375rem] font-bold tracking-[0.08em] text-texto ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave placeholder:font-medium aria-[invalid=true]:ring-alerta" />
           <p id="placa-ayuda" className={`mt-1.5 px-1 text-[0.8125rem] ${placa && validar.placa(placa) ? 'text-alerta' : 'text-suave'}`}>
             {placa && validar.placa(placa) ? validar.placa(placa) : 'Letras y números, como aparecen en la placa.'}
           </p>

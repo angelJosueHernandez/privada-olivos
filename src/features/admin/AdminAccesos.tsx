@@ -79,7 +79,7 @@ export default function AdminAccesos() {
           <span className="sr-only">Buscar</span>
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-texto/45"><Icon n="buscar" size={18} /></span>
           <input type="search" value={busqueda} onChange={(e) => setBusqueda(filtrar.linea(e.target.value, LARGO.busqueda))} maxLength={LARGO.busqueda} placeholder="Buscar nombre, casa, placas o folio"
-            className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-texto/45" />
+            className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-suave" />
         </label>
         <div role="group" aria-label="Estado" className="flex gap-1 overflow-x-auto rounded-[12px] bg-texto/[0.06] p-1 [scrollbar-width:none]">
           {([['TODOS', 'Todos'], ['DENTRO', 'Dentro'], ['CASETA', 'En caseta'], ['SALIERON', 'Salidas']] as [Estado, string][]).map(([v, t]) => (

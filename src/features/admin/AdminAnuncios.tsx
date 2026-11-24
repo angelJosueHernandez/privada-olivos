@@ -6,7 +6,7 @@ import Icon from '../../shared/ui/Icon'
 import { Opciones } from '../../shared/ui/Opciones'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Vacio from '../../shared/ui/Vacio'
-import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { CAMPO_INVALIDO, ErrorFormulario, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
 import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { useAuth } from '../auth/AuthContext'
 import { directorioService } from '../directorio/directorioService'
@@ -16,7 +16,7 @@ import ListaAnuncios, { contarRespuestas } from '../comunidad/ListaAnuncios'
 import { Anuncio, anuncioPara, anuncioVigente, CATEGORIAS, CategoriaAnuncio, fechaLocal, NuevoAnuncio, TipoRespuesta } from '../comunidad/tipos'
 
 const FORM = 'anuncio'
-const campo = 'block w-full rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-texto/40'
+const campo = 'block w-full rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none transition-[box-shadow] duration-150 focus:ring-2 focus:ring-acento placeholder:text-suave'
 type Vigencia = 'SIEMPRE' | 'SEMANA' | 'MES' | 'FECHA'
 type Filtro = 'VISIBLES' | 'TODOS'
 type PideRespuesta = TipoRespuesta | 'NO'
@@ -140,8 +140,10 @@ function FormAnuncio({ inicial, onGuardar }: { inicial?: Anuncio; onGuardar: (d:
     e.preventDefault()
     const t = titulo.trim(), c = cuerpo.trim()
     const vence = calcularVence()
-    const falta = v.revisar() || (!categoria ? 'Elige una categoría.' : vence === null ? 'Elige una fecha a partir de hoy.' : '')
-    if (falta) { setError(falta); toast.error(falta); return }
+    setError('')
+    if (v.revisar()) return
+    const falta = !categoria ? 'Elige una categoría.' : vence === null ? 'Elige una fecha a partir de hoy.' : ''
+    if (falta) { setError(falta); return }
     setError('')
     await onGuardar({ titulo: t.slice(0, 90), cuerpo: c.slice(0, 2000), categoria: categoria!, importante, calle: calle === 'TODAS' ? undefined : calle, vence: vence ?? undefined, pideRespuesta: pide === 'NO' ? undefined : pide })
   }
@@ -201,7 +203,7 @@ function FormAnuncio({ inicial, onGuardar }: { inicial?: Anuncio; onGuardar: (d:
           after:absolute after:left-[2px] after:top-[2px] after:h-[27px] after:w-[27px] after:rounded-full after:bg-white after:shadow-[0_2px_4px_rgb(0_0_0/0.2)]
           after:transition-transform after:duration-200 after:ease-[var(--ease-out)] peer-checked:after:translate-x-5 peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-acento/55" />
       </label>
-      {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+      <ErrorFormulario mensaje={error} />
     </form>
   )
 }

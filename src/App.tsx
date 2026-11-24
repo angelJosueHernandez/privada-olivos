@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { rutaInicio, useAuth } from './features/auth/AuthContext'
@@ -50,11 +51,12 @@ export default function App() {
       </Routes>
       )}
       <AvisoCookies />
-      {/* Notificaciones (Sonner): arriba al centro, lejos del pulgar y del aviso de cookies */}
-      <Toaster position="top-center" richColors closeButton duration={3500}
+      {/* Notificaciones (Sonner): arriba al centro, lejos del pulgar y del aviso de cookies.
+          Fuera de #root para que sigan activas cuando una hoja deja la app inerte. */}
+      {createPortal(<Toaster position="top-center" richColors closeButton duration={3500}
         offset={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}
         mobileOffset={{ top: 'calc(env(safe-area-inset-top) + 8px)' }}
-        toastOptions={{ style: { fontFamily: 'inherit', borderRadius: '16px', fontSize: '0.9375rem' } }} />
+        toastOptions={{ style: { fontFamily: 'inherit', borderRadius: '16px', fontSize: '0.9375rem' } }} />, document.body)}
     </>
   )
 }

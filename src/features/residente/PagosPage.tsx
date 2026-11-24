@@ -5,7 +5,7 @@ import Hoja from '../../shared/ui/Hoja'
 import Icon from '../../shared/ui/Icon'
 import { Opciones, OpcionesMultiples } from '../../shared/ui/Opciones'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
-import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { CAMPO_INVALIDO, ErrorFormulario, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
 import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { useAuth } from '../auth/AuthContext'
 import type { Actor } from '../caseta/tipos'
@@ -217,9 +217,10 @@ function FormComprobante({ porPagar, onEnviar }: {
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
     const fechaPago = cuando === 'HOY' ? new Date() : cuando === 'AYER' ? new Date(Date.now() - 86_400_000) : otraFecha ? new Date(`${otraFecha}T12:00:00`) : null
-    const campos = v.revisar()
-    const falta = !periodos.length ? 'Elige qué meses pagas.' : !metodo ? 'Elige cómo pagaste.' : campos || (!fechaPago || isNaN(fechaPago.getTime()) ? 'Revisa la fecha del pago.' : !imagen ? 'Agrega la foto o captura del comprobante.' : '')
-    if (falta) { setError(falta); toast.error(falta); return }
+    setError('')
+    if (v.revisar()) return
+    const falta = !periodos.length ? 'Elige qué meses pagas.' : !metodo ? 'Elige cómo pagaste.' : (!fechaPago || isNaN(fechaPago.getTime()) ? 'Revisa la fecha del pago.' : !imagen ? 'Agrega la foto o captura del comprobante.' : '')
+    if (falta) { setError(falta); return }
     setError('')
     await onEnviar({ periodos, monto, metodo: metodo!, fechaPago: fechaPago!, referencia: referencia.trim() || undefined }, imagen!.blob)
   }
@@ -278,12 +279,12 @@ function FormComprobante({ porPagar, onEnviar }: {
         <label htmlFor="ref" className="mb-1.5 block text-[1.0625rem] font-semibold">Folio o clave de rastreo <span className="font-normal text-[0.9375rem] text-suave">(opcional)</span></label>
         <input id="ref" value={referencia} onChange={(e) => setReferencia(filtrar.referencia(e.target.value))} maxLength={LARGO.referencia} autoComplete="off" spellCheck={false}
           autoCapitalize="characters" placeholder="Ej. MBAN01002511230012" {...v.props('referencia')}
-          className={`block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] tracking-[0.02em] ring-1 ring-inset ring-borde outline-none focus:ring-2 focus:ring-acento placeholder:text-texto/35 ${CAMPO_INVALIDO}`} />
+          className={`block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] tracking-[0.02em] ring-1 ring-inset ring-borde outline-none focus:ring-2 focus:ring-acento placeholder:text-suave ${CAMPO_INVALIDO}`} />
         {v.error('referencia') ? <MensajeCampo id={v.idError('referencia')} mensaje={v.error('referencia')} />
           : <p className="mt-1.5 px-1 text-[0.8125rem] text-suave">Letras y números, como aparece en tu comprobante.</p>}
       </section>
 
-      {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
+      <ErrorFormulario mensaje={error} />
     </form>
   )
 }

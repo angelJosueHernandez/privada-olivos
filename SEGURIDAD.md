@@ -129,6 +129,27 @@ Las reglas viven en `src/shared/validacion.ts` y la API debe aplicar **las misma
 | Textos libres | Sin caracteres de control ni invisibles (incluye los de dirección bidi), con límite de largo |
 | Fecha de pago | No futura y no más de 6 meses atrás |
 
+### 7g. Auditoría desde la perspectiva de un atacante (2026-11-23)
+
+Revisado contra producción (`privada-olivos.vercel.app`) con las herramientas que usaría alguien con experiencia:
+
+| Qué se buscó | Resultado |
+|---|---|
+| Llaves en el JavaScript (Anthropic, AWS, Google, JWT, GitHub, llaves privadas) | **Ninguna.** Solo existe `VITE_API_URL` (pública por diseño) |
+| Source maps (`.js.map`) | No publicados (403) |
+| Encabezados | CSP estricta sin `unsafe-inline` en scripts, HSTS con preload, `frame-ancestors 'none'`, nosniff, COOP/CORP, Permissions-Policy |
+| XSS | Sin `dangerouslySetInnerHTML`, `innerHTML`, `eval` ni `new Function` en el código propio; React escapa todo; imágenes re-codificadas a JPEG en canvas (un SVG con script no sobrevive) |
+| Redirecciones abiertas | Ninguna; el service worker solo abre rutas internas |
+| Dependencias | `npm audit`: 0 vulnerabilidades |
+| `/api/placas` | Ahora valida origen **antes** de revelar si está configurado; rechaza `Sec-Fetch-Site` ajeno; JPEG real, ≤2 MB, 30 lecturas/10 min por IP, `max_tokens` 400 |
+
+**Hallazgos y lo que se hizo**
+- **Hashes de las cuentas de prueba en el código**: eran SHA-256 de contraseñas débiles (se adivinaban en segundos con un diccionario). Ahora PBKDF2-SHA256 con 210 000 iteraciones y comparación en tiempo constante. Aun así, en modo demo **todo vive en el navegador**: quien edite su `localStorage` puede darse rol de administrador *en su propio navegador* (no afecta a nadie más porque no hay datos compartidos). La protección real llega con la API.
+- **`/api/placas` puede ser llamada por un script que falsifique `Origin`** (los navegadores no lo permiten, `curl` sí). Mientras no exista sesión en el servidor:
+  1. En la consola de Anthropic, crea un **workspace solo para esta app** y ponle un **límite de gasto mensual** (p. ej. 5–10 USD); usa una llave de ese workspace.
+  2. Cuando exista la API, exigir sesión de guardia y límite por usuario con almacenamiento compartido (Redis/KV), no en memoria.
+- **Datos personales en `localStorage` (demo)**: nombres, teléfonos, comprobantes y secretos TOTP de prueba. Aceptable solo para demostración; en producción viven en el servidor y el navegador no guarda nada sensible.
+
 ### 7c. Notificaciones push
 - Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
   push responde 404/410.
