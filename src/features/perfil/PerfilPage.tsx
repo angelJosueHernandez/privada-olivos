@@ -12,6 +12,7 @@ import Hoja from '../../shared/ui/Hoja'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import { authService } from '../auth/authService'
 import { PASSWORD_MIN, revisarPassword } from '../directorio/tipos'
+import ConfigurarAutenticador from '../auth/ConfigurarAutenticador'
 
 const iniciales = (n: string) => n.split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase()
 
@@ -30,6 +31,36 @@ function Fila({ icono, etiqueta, children }: { icono: IconName; etiqueta: string
       <dt className="flex-1 text-[0.9375rem]">{etiqueta}</dt>
       <dd className="text-[0.9375rem] font-medium text-right text-texto/80 min-w-0 truncate">{children}</dd>
     </div>
+  )
+}
+
+/* App autenticadora: ver cuál protege la cuenta y configurarla o cambiarla (celular nuevo) */
+function DosPasos() {
+  const { user } = useAuth()
+  const [estado, setEstado] = useState(user?.dosPasos ?? 'SIN_CONFIGURAR')
+  const [abierto, setAbierto] = useState(false)
+  useAtrasCierra(abierto, () => setAbierto(false))
+  if (!user) return null
+  return (
+    <>
+      <div className="flex items-center gap-3.5 px-4 min-h-[56px] py-2.5">
+        <span className="grid place-items-center h-9 w-9 shrink-0 rounded-[10px] bg-fondo text-texto/70"><Icon n="candado" size={18} /></span>
+        <dt className="min-w-0 flex-1 text-[0.9375rem]">
+          Verificación en dos pasos
+          <span className={`block text-[0.8125rem] ${estado === 'APP' ? 'text-ok' : 'text-alerta'}`}>
+            {estado === 'APP' ? 'Con app autenticadora' : estado === 'PRUEBA' ? 'Con código de prueba' : 'Sin configurar'}
+          </span>
+        </dt>
+        <dd><button type="button" onClick={() => setAbierto(true)} className="min-h-11 px-1 text-[0.9375rem] font-medium text-acento">{estado === 'APP' ? 'Cambiar' : 'Configurar'}</button></dd>
+      </div>
+      {abierto && (
+        <Hoja titulo={estado === 'APP' ? 'Cambiar app autenticadora' : 'App autenticadora'} onCerrar={() => setAbierto(false)}>
+          {estado === 'APP' && <p className="mb-6 rounded-[14px] bg-alerta/[0.1] px-4 py-3 text-[0.9375rem] text-texto/85">Al terminar, los códigos de tu app anterior dejarán de servir. Úsalo si cambiaste de celular.</p>}
+          <ConfigurarAutenticador iniciar={() => authService.iniciar2fa(user)}
+            onCodigo={async (c) => { await authService.activar2fa(user, c); setEstado('APP'); setAbierto(false); toast.success('App autenticadora lista', { description: 'Desde ahora te pediremos su código al entrar.' }) }} />
+        </Hoja>
+      )}
+    </>
   )
 }
 
@@ -153,9 +184,7 @@ export default function PerfilPage() {
         </Grupo>
 
         <Grupo titulo="Seguridad" retraso={120}>
-          <Fila icono="candado" etiqueta="Verificación en dos pasos">
-            <span className="inline-flex items-center gap-1.5 text-ok"><Icon n="check" size={15} stroke={3} />Activa</span>
-          </Fila>
+          <DosPasos />
           <Fila icono="reloj" etiqueta="Sesión iniciada">
             {inicioSesion ? inicioSesion.toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
           </Fila>

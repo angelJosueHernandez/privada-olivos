@@ -310,7 +310,7 @@ const MOTIVOS = ['Ya no vive en la privada', 'Adeudo', 'Mal uso de la app', 'Dej
 function DetalleCuenta({ cuenta: c, actor, onEditar, onTemporal, onEliminada }: {
   cuenta: Cuenta; actor: Actor; onEditar: () => void; onTemporal: (t: string) => void; onEliminada: () => void
 }) {
-  const [confirmar, setConfirmar] = useState<'suspender' | 'eliminar' | 'restablecer' | 'sesiones' | null>(null)
+  const [confirmar, setConfirmar] = useState<'suspender' | 'eliminar' | 'restablecer' | 'sesiones' | '2fa' | null>(null)
   const [motivo, setMotivo] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const esYo = c.id === actor.id
@@ -322,6 +322,7 @@ function DetalleCuenta({ cuenta: c, actor, onEditar, onTemporal, onEliminada }: 
     finally { setOcupado(false) }
   }
   const restablecer = () => hacer(async () => { onTemporal(await directorioService.restablecerPassword(c.id, actor)) })
+  const dosPasos = () => hacer(async () => { await directorioService.restablecer2fa(c.id, actor); toast.success('Verificación restablecida', { description: 'Al entrar configurará su app autenticadora de nuevo.' }) })
   const sesiones = () => hacer(async () => { await directorioService.cerrarSesiones(c.id, actor); toast.success('Sesiones cerradas', { description: `${c.nombre.split(' ')[0]} tendrá que volver a iniciar sesión.` }) })
   const suspender = () => hacer(async () => { await directorioService.suspender(c.id, motivo, actor); toast.success('Cuenta suspendida', { description: 'Ya no puede entrar y se cerraron sus sesiones.' }) })
   const reactivar = () => hacer(async () => { await directorioService.reactivar(c.id, actor); toast.success('Cuenta reactivada') })
@@ -360,6 +361,7 @@ function DetalleCuenta({ cuenta: c, actor, onEditar, onTemporal, onEliminada }: 
         <Dato etiqueta="Correo">{c.email}</Dato>
         <Dato etiqueta="Teléfono">{c.telefono ? <span className="cifras">{c.telefono.replace(/(\d{2})(\d{4})(\d{4})/, '$1 $2 $3')}</span> : '—'}</Dato>
         {c.rol === 'RESIDENTE' && <Dato etiqueta="Casa">{c.casa ?? '—'}</Dato>}
+        <Dato etiqueta="Dos pasos">{c.dosPasos === 'APP' ? 'App autenticadora' : c.dosPasos === 'PRUEBA' ? 'Código de prueba' : <span className="text-alerta">Sin configurar</span>}</Dato>
         <Dato etiqueta="Último acceso">{haceCuanto(c.ultimoAcceso)}</Dato>
         <Dato etiqueta="Alta">{fecha(c.creadoEn)}</Dato>
       </div>
@@ -367,6 +369,9 @@ function DetalleCuenta({ cuenta: c, actor, onEditar, onTemporal, onEliminada }: 
       {confirmar === 'restablecer' ? (
         <Confirmacion ocupado={ocupado} onNo={cancelar} titulo={c.tieneAcceso ? '¿Restablecer contraseña?' : '¿Generar acceso?'} boton="Generar contraseña" onSi={restablecer}
           texto={c.tieneAcceso ? 'Su contraseña actual dejará de servir y se cerrará su sesión en todos sus dispositivos.' : 'Se creará una contraseña temporal para que pueda entrar.'} />
+      ) : confirmar === '2fa' ? (
+        <Confirmacion ocupado={ocupado} onNo={cancelar} titulo="¿Restablecer su verificación en dos pasos?" boton="Restablecer" onSi={dosPasos}
+          texto="Su app autenticadora actual dejará de servir, se cerrarán sus sesiones y la próxima vez que entre escaneará un código nuevo. Confirma antes que realmente es la persona (por ejemplo, en persona o por llamada)." />
       ) : confirmar === 'sesiones' ? (
         <Confirmacion ocupado={ocupado} onNo={cancelar} titulo="¿Cerrar sus sesiones?" boton="Cerrar sesiones" onSi={sesiones}
           texto="Saldrá de la app en todos sus dispositivos. Podrá volver a entrar con su contraseña. Útil si perdió o le robaron el celular." />
@@ -393,6 +398,7 @@ function DetalleCuenta({ cuenta: c, actor, onEditar, onTemporal, onEliminada }: 
           <div className="rounded-[18px] bg-panel shadow-tarjeta divide-y divide-separador overflow-hidden">
             <Accion icono="editar" texto="Editar datos" detalle="Nombre, correo, teléfono, rol o casa" onClick={onEditar} />
             <Accion icono="candado" texto={c.tieneAcceso ? 'Restablecer contraseña' : 'Generar contraseña'} detalle={`Temporal, vence en ${HORAS_TEMPORAL} h`} onClick={() => setConfirmar('restablecer')} disabled={c.estado === 'SUSPENDIDA'} />
+            <Accion icono="escanear" texto="Restablecer verificación en dos pasos" detalle="Si perdió o cambió de celular" onClick={() => setConfirmar('2fa')} disabled={c.estado === 'SUSPENDIDA' || c.dosPasos === 'SIN_CONFIGURAR'} />
             <Accion icono="salir" texto="Cerrar sus sesiones" detalle="La saca de todos sus dispositivos" onClick={() => setConfirmar('sesiones')} disabled={c.estado === 'SUSPENDIDA' || !c.tieneAcceso} />
           </div>
           <div className="rounded-[18px] bg-panel shadow-tarjeta divide-y divide-separador overflow-hidden">

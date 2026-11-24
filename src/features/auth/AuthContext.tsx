@@ -9,6 +9,12 @@ type Ctx = {
   /** Cuándo inició la sesión actual (se muestra en el perfil) */
   inicioSesion: Date | null
   pendiente2fa: boolean
+  /** Cuenta que ya pasó la contraseña y espera el segundo paso */
+  pendienteUsuario: Usuario | null
+  /** La cuenta en espera debe configurar su app autenticadora (escanear el QR) */
+  configurar2fa: boolean
+  /** Activa la app autenticadora de la cuenta en espera con su primer código y entra */
+  activar2fa: (codigo: string) => Promise<void>
   /** false mientras se revisa si hay una sesión que recuperar (al recargar) */
   listo: boolean
   login: (email: string, password: string) => Promise<void>
@@ -29,6 +35,7 @@ const congelar = (u: Usuario): Usuario => Object.freeze({ ...u })
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Usuario | null>(null)
   const [pendiente, setPendiente] = useState<Usuario | null>(null)
+  const [configurar, setConfigurar] = useState(false)
   const [inicioSesion, setInicioSesion] = useState<Date | null>(null)
   const [listo, setListo] = useState(false)
 
@@ -45,13 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback<Ctx['login']>(async (email, password) => {
     const r = await authService.login(email, password)
-    if (r.requiere2fa) setPendiente(congelar(r.usuario))
+    if (r.requiere2fa) { setPendiente(congelar(r.usuario)); setConfigurar(r.configurar2fa) }
     else { const ahora = new Date(); setUser(congelar(r.usuario)); setInicioSesion(ahora); authService.recordar(r.usuario, ahora) }
   }, [])
 
   const verificar2fa = useCallback<Ctx['verificar2fa']>(async (codigo) => {
     if (!pendiente) throw new Error('Inicia sesión de nuevo.')
-    await authService.verificar2fa(codigo)
+    await authService.verificar2fa(codigo, pendiente)
     const ahora = new Date()
     setUser(pendiente)
     setInicioSesion(ahora)
@@ -59,10 +66,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPendiente(null)
   }, [pendiente])
 
+  const activar2fa = useCallback<Ctx['activar2fa']>(async (codigo) => {
+    if (!pendiente) throw new Error('Inicia sesión de nuevo.')
+    await authService.activar2fa(pendiente, codigo)
+    const ahora = new Date()
+    setUser(pendiente); setInicioSesion(ahora); authService.recordar(pendiente, ahora)
+    setPendiente(null); setConfigurar(false)
+  }, [pendiente])
+
   // Cierra la sesión local de inmediato, limpia el historial y pide a la API invalidar la cookie
   const logout = useCallback(() => {
     setUser(null)
     setPendiente(null)
+    setConfigurar(false)
     setInicioSesion(null)
     void authService.logout()
     // Reemplaza la entrada actual para que "atrás" no regrese a una pantalla protegida
@@ -92,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { vivo = false; quitar(); clearInterval(t); document.removeEventListener('visibilitychange', alVolver) }
   }, [user, inicioSesion, logout])
 
-  const valor = useMemo(() => ({ user, inicioSesion, pendiente2fa: !!pendiente, listo, login, verificar2fa, logout, crearPassword }), [user, inicioSesion, pendiente, listo, login, verificar2fa, logout, crearPassword])
+  const valor = useMemo(() => ({ user, inicioSesion, pendiente2fa: !!pendiente, pendienteUsuario: pendiente, configurar2fa: !!pendiente && configurar, activar2fa, listo, login, verificar2fa, logout, crearPassword }),
+    [user, inicioSesion, pendiente, configurar, activar2fa, listo, login, verificar2fa, logout, crearPassword])
   return <AuthCtx.Provider value={valor}>{children}</AuthCtx.Provider>
 }

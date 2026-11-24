@@ -102,6 +102,16 @@ esta página. La seguridad real vive en el servidor.
 - **Bitácora:** cada alta, cambio, suspensión, restablecimiento y cierre de sesiones se guarda con quién, cuándo e IP; es de solo lectura (sin UPDATE/DELETE para la app).
 - **Demo:** las cuentas viven en `localStorage` con hash SHA-256 (`olv:<id>:<contraseña>`); sirve para probar el flujo, no es seguridad real.
 
+### 7e. Verificación en dos pasos (app autenticadora)
+
+- **Estándar TOTP (RFC 6238)**: SHA-1, 6 dígitos, 30 s. Compatible con Google Authenticator, Contraseñas de iPhone (código de verificación), Microsoft Authenticator, Authy y 1Password.
+- **El secreto vive solo en el servidor**: 160 bits de CSPRNG, guardado **cifrado** (AES-GCM con llave en Key Vault/variable de entorno, no en la BD). Solo se muestra al configurarlo (`POST /api/auth/2fa/configurar` devuelve `otpauth://` y el secreto); queda *pendiente* hasta confirmarlo con un código válido (`POST /api/auth/2fa/activar`).
+- **Verificación**: ventana de ±1 periodo; guardar el último periodo usado y **rechazar reutilizar** un código; límite de intentos por cuenta e IP (p. ej. 5 fallos → espera exponencial) porque 6 dígitos se pueden adivinar por fuerza bruta.
+- **Primer ingreso obligatorio**: una cuenta sin app autenticadora solo puede llamar a configurar/activar 2FA hasta terminar; ninguna otra ruta responde.
+- **Cambiar la app desde el perfil** debe pedir antes la contraseña actual o el código vigente (re-autenticación).
+- **Celular perdido**: la administración usa *Restablecer verificación en dos pasos* (queda en bitácora y cierra sesiones) **después de confirmar la identidad** en persona o por llamada. Opcional: códigos de recuperación de un solo uso.
+- **Demo**: el secreto se guarda en `localStorage` y se verifica en el navegador con Web Crypto; las cuentas de prueba aceptan `123456` hasta configurar una app.
+
 ### 7c. Notificaciones push
 - Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
   push responde 404/410.

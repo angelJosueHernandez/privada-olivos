@@ -37,6 +37,8 @@ export type Cuenta = {
   ultimoAcceso?: Date
   /** Las sesiones iniciadas antes de esta fecha ya no son válidas */
   sesionesCerradasEn?: Date
+  /** Segundo factor: app autenticadora, código fijo de prueba (solo demo) o falta configurarlo */
+  dosPasos: 'APP' | 'PRUEBA' | 'SIN_CONFIGURAR'
 }
 export type DatosCuenta = Pick<Cuenta, 'nombre' | 'email' | 'telefono' | 'rol' | 'casa'>
 

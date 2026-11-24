@@ -8,6 +8,8 @@ export type Usuario = {
   id: string; nombre: string; rol: Rol; casa?: string; email?: string
   /** Entró con una contraseña temporal: antes de usar la app debe crear la suya */
   debeCambiar?: boolean
+  /** Cómo protege su segundo paso: app autenticadora o código de prueba (demo) */
+  dosPasos?: 'APP' | 'PRUEBA' | 'SIN_CONFIGURAR'
 }
 
 /*
@@ -19,12 +21,6 @@ export type Usuario = {
 */
 export const MODO_DEMO = !hayApi
 
-const DEMO_2FA = '220f3d1e7e34b05aa0fdae94fb025f6edb9218a8fef6e1c639eb7003493d3239'
-
-async function sha256(texto: string): Promise<string> {
-  const datos = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto))
-  return Array.from(new Uint8Array(datos), (b) => b.toString(16).padStart(2, '0')).join('')
-}
 const espera = (ms = 400) => new Promise((r) => setTimeout(r, ms))
 
 // Nunca confiar en la forma de lo que llega: se valida antes de usarlo en la app.
@@ -39,9 +35,10 @@ function validarUsuario(u: unknown): Usuario {
     casa: typeof x.casa === 'string' ? x.casa.slice(0, 120) : undefined,
     email: typeof x.email === 'string' ? x.email.slice(0, 254) : undefined,
     debeCambiar: x.debeCambiar === true,
+    dosPasos: x.dosPasos === 'APP' || x.dosPasos === 'PRUEBA' ? x.dosPasos : 'SIN_CONFIGURAR',
   }
 }
-const deCuenta = (c: Cuenta): Usuario => ({ id: c.id, nombre: c.nombre, rol: c.rol, casa: c.casa, email: c.email, debeCambiar: c.debeCambiar })
+const deCuenta = (c: Cuenta): Usuario => ({ id: c.id, nombre: c.nombre, rol: c.rol, casa: c.casa, email: c.email, debeCambiar: c.debeCambiar, dosPasos: c.dosPasos })
 
 const CLAVE_SESION = 'olv-sesion'
 function borrarSesionDemo() { try { sessionStorage.removeItem(CLAVE_SESION) } catch { /* nada */ } }
@@ -50,18 +47,23 @@ export const LIMITES = { email: 254, password: 128 } as const
 const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const authService = {
-  async login(emailCrudo: string, password: string): Promise<{ usuario: Usuario; requiere2fa: boolean }> {
+  /**
+   * Primer paso. `configurar2fa`: la cuenta aún no tiene app autenticadora y debe configurarla
+   * (escanear el QR) antes de entrar.
+   */
+  async login(emailCrudo: string, password: string): Promise<{ usuario: Usuario; requiere2fa: boolean; configurar2fa: boolean }> {
     const email = emailCrudo.trim().toLowerCase()
     if (!CORREO.test(email) || email.length > LIMITES.email || password.length > LIMITES.password) {
       throw new Error('Correo o contraseña incorrectos.')
     }
     if (MODO_DEMO) {
       await espera()
-      return { usuario: deCuenta(await directorioService.verificar(email, password)), requiere2fa: true }
+      const cuenta = await directorioService.verificar(email, password)
+      return { usuario: deCuenta(cuenta), requiere2fa: true, configurar2fa: directorioService.necesitaConfigurar2fa(cuenta.id) }
     }
     try {
-      const r = await api<{ usuario: unknown; requiere2fa: boolean }>('/api/auth/login', { metodo: 'POST', cuerpo: { email, password } })
-      return { usuario: validarUsuario(r.usuario), requiere2fa: r.requiere2fa === true }
+      const r = await api<{ usuario: unknown; requiere2fa: boolean; configurar2fa?: boolean }>('/api/auth/login', { metodo: 'POST', cuerpo: { email, password } })
+      return { usuario: validarUsuario(r.usuario), requiere2fa: r.requiere2fa === true, configurar2fa: r.configurar2fa === true }
     } catch (e) {
       // Mismo mensaje si el correo no existe o la contraseña falla: no revela qué cuentas existen.
       if (e instanceof ErrorApi && (e.estado === 400 || e.estado === 401)) throw new Error('Correo o contraseña incorrectos.')
@@ -69,12 +71,11 @@ export const authService = {
     }
   },
 
-  async verificar2fa(codigo: string): Promise<void> {
+  async verificar2fa(codigo: string, usuario: Usuario): Promise<void> {
     if (!/^\d{6}$/.test(codigo)) throw new Error('El código debe tener 6 dígitos.')
     if (MODO_DEMO) {
       await espera()
-      if ((await sha256(`2fa:${codigo}`)) !== DEMO_2FA) throw new Error('El código no es correcto. Revisa tu app de autenticación.')
-      return
+      return directorioService.verificarSegundoFactor(usuario.id, codigo)
     }
     try {
       await api('/api/auth/2fa', { metodo: 'POST', cuerpo: { codigo } })
@@ -137,6 +138,32 @@ export const authService = {
       const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? 'null')
       if (s) sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ ...s, ultima: Date.now() }))
     } catch { /* nada */ }
+  },
+
+  /**
+   * Configurar la app autenticadora: el servidor genera el secreto y lo guarda pendiente.
+   * Se devuelve el enlace otpauth:// para el QR (y el secreto para escribirlo a mano).
+   */
+  async iniciar2fa(usuario: Usuario): Promise<{ secreto: string; uri: string }> {
+    if (!MODO_DEMO) {
+      const r = await api<{ secreto: unknown; uri: unknown }>('/api/auth/2fa/configurar', { metodo: 'POST' })
+      if (typeof r.secreto !== 'string' || typeof r.uri !== 'string' || !r.uri.startsWith('otpauth://totp/')) throw new ErrorApi('Respuesta inesperada del servidor.', 0)
+      return { secreto: r.secreto, uri: r.uri }
+    }
+    return directorioService.iniciar2fa(usuario.id)
+  },
+  /** Confirma la configuración con el primer código que muestra la app */
+  async activar2fa(usuario: Usuario, codigo: string): Promise<void> {
+    if (!/^\d{6}$/.test(codigo)) throw new Error('El código debe tener 6 dígitos.')
+    if (!MODO_DEMO) {
+      try { await api('/api/auth/2fa/activar', { metodo: 'POST', cuerpo: { codigo } }); return }
+      catch (e) {
+        if (e instanceof ErrorApi && (e.estado === 400 || e.estado === 401)) throw new Error('El código no coincide. Escribe el código actual de tu app.')
+        throw e
+      }
+    }
+    await espera()
+    await directorioService.activar2fa(usuario.id, codigo)
   },
 
   async logout(): Promise<void> {

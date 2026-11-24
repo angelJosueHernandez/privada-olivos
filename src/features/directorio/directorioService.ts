@@ -1,5 +1,6 @@
 import { api, hayApi } from '../../shared/api/cliente'
 import type { Rol } from '../auth/authService'
+import { generarSecreto, uriOtp, verificarTotp } from '../auth/totp'
 import type { Actor } from '../caseta/tipos'
 import {
   CORREO, ETIQUETA_ROL, HORAS_TEMPORAL, nombreCasa, revisarPassword,
@@ -17,9 +18,22 @@ import {
   SHA-256 (nunca en texto), pero recuerda que el demo no es seguridad real.
 */
 
-type CuentaGuardada = Cuenta & { hash?: string }
+/** Datos internos que nunca salen del servicio */
+type Secretos = {
+  hash?: string
+  /** Secreto TOTP activo (en producción: cifrado en el servidor) */
+  totp?: string
+  /** Secreto en proceso de configuración, aún sin confirmar con un código */
+  totpPendiente?: string
+  /** Último periodo usado: impide reutilizar el mismo código */
+  totpUltimo?: number
+  /** Solo demo: acepta el código fijo de prueba mientras no configure una app */
+  codigoDemo?: boolean
+}
+type CuentaGuardada = Omit<Cuenta, 'dosPasos'> & Secretos
+const DEMO_2FA = '220f3d1e7e34b05aa0fdae94fb025f6edb9218a8fef6e1c639eb7003493d3239'
 type EstadoDemo = { casas: Casa[]; cuentas: CuentaGuardada[]; cambios: Cambio[] }
-const CLAVE = 'olv-directorio-v1'
+const CLAVE = 'olv-directorio-v2'
 
 async function sha256(texto: string): Promise<string> {
   const datos = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto))
@@ -47,7 +61,7 @@ function semilla(): EstadoDemo {
     ...Array.from({ length: 6 }, (_, i) => ({ calle: 'Olmo', numero: String(301 + i) })),
   ].map((c) => ({ ...c, id: `casa-${c.calle.toLowerCase()}-${c.numero}`, activa: true, creadaEn: inicio }))
 
-  const base = { estado: 'ACTIVA' as const, debeCambiar: false, creadoEn: inicio }
+  const base = { estado: 'ACTIVA' as const, debeCambiar: false, creadoEn: inicio, codigoDemo: true }
   const cuentas: CuentaGuardada[] = [
     // Cuentas de prueba (las mismas contraseñas de siempre; aquí solo vive su hash)
     { ...base, id: '1', nombre: 'Alejandro Garza', email: 'admin@demo.mx', telefono: '8112345678', rol: 'ADMIN', tieneAcceso: true, ultimoAcceso: hace(0, 9), hash: '54d8f5b739c1a85b05c79b7ea1a2819729f0cddc4d798a07e3dbf7e3b0c50168' },
@@ -73,7 +87,7 @@ const fechas = <T extends object>(o: T, campos: string[]): T => {
   campos.forEach((c) => { if (typeof r[c] === 'string') r[c] = new Date(r[c] as string) })
   return r as T
 }
-const revivirCuenta = (c: Cuenta) => fechas(c, ['temporalVence', 'creadoEn', 'ultimoAcceso', 'sesionesCerradasEn'])
+const revivirCuenta = <T extends Omit<Cuenta, 'dosPasos'>>(c: T) => fechas(c, ['temporalVence', 'creadoEn', 'ultimoAcceso', 'sesionesCerradasEn'])
 const revivirCasa = (c: Casa) => fechas(c, ['creadaEn'])
 const revivirCambio = (c: Cambio) => fechas(c, ['en'])
 
@@ -98,7 +112,8 @@ if (!hayApi && typeof window !== 'undefined') {
 
 const espera = (ms = 300) => new Promise((r) => setTimeout(r, ms))
 /** Lo que sale del servicio nunca lleva el hash */
-const publica = ({ hash: _h, ...c }: CuentaGuardada): Cuenta => c
+const publica = ({ hash: _h, totp, totpPendiente: _p, totpUltimo: _u, codigoDemo, ...c }: CuentaGuardada): Cuenta =>
+  ({ ...c, dosPasos: totp ? 'APP' : codigoDemo ? 'PRUEBA' : 'SIN_CONFIGURAR' })
 const anotar = (por: Actor, accion: string, detalle: string) => {
   demo.cambios = [{ id: crypto.randomUUID(), en: new Date(), por, accion, detalle }, ...demo.cambios].slice(0, 300)
 }
@@ -163,6 +178,41 @@ export const directorioService = {
     if (c.sesionesCerradasEn && c.sesionesCerradasEn.getTime() > inicio.getTime()) return null
     return publica(c)
   },
+  /** ¿Debe configurar su app autenticadora antes de entrar? */
+  necesitaConfigurar2fa(id: string): boolean {
+    const c = demo.cuentas.find((x) => x.id === id)
+    return !!c && !c.totp && !c.codigoDemo
+  },
+  /** Segundo paso del login: código de la app autenticadora (o el de prueba en cuentas demo) */
+  async verificarSegundoFactor(id: string, codigo: string): Promise<void> {
+    const c = buscar(id)
+    if (c.totp) {
+      const usado = await verificarTotp(c.totp, codigo, c.totpUltimo)
+      if (usado === null) throw new Error('El código no es correcto o ya se usó. Espera al siguiente en tu app.')
+      actualizar(id, { totpUltimo: usado }); guardar()
+      return
+    }
+    const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`2fa:${codigo}`))), (b) => b.toString(16).padStart(2, '0')).join('')
+    if (!c.codigoDemo || h !== DEMO_2FA) throw new Error('El código no es correcto. Revisa tu app de autenticación.')
+  },
+  /** Genera un secreto nuevo (pendiente hasta confirmarlo con un código) */
+  iniciar2fa(id: string): { secreto: string; uri: string } {
+    const c = buscar(id)
+    const secreto = generarSecreto()
+    actualizar(id, { totpPendiente: secreto }); guardar()
+    return { secreto, uri: uriOtp(secreto, c.email) }
+  },
+  /** Confirma el secreto pendiente con el primer código de la app; desde ahí ya no vale el de prueba */
+  async activar2fa(id: string, codigo: string): Promise<void> {
+    const c = buscar(id)
+    if (!c.totpPendiente) throw new Error('Vuelve a escanear el código QR.')
+    const usado = await verificarTotp(c.totpPendiente, codigo)
+    if (usado === null) throw new Error('El código no coincide. Revisa que la hora de tu celular sea automática y escribe el código actual.')
+    actualizar(id, { totp: c.totpPendiente, totpPendiente: undefined, totpUltimo: usado, codigoDemo: false })
+    anotar({ id: c.id, nombre: c.nombre, rol: c.rol, casa: c.casa }, c.totp ? 'App autenticadora cambiada' : 'Verificación en dos pasos activada', c.nombre)
+    guardar()
+  },
+
   registrarAcceso(id: string) {
     if (hayApi) return
     actualizar(id, { ultimoAcceso: new Date() }); guardar()
@@ -249,6 +299,16 @@ export const directorioService = {
     anotar(actor, c.tieneAcceso ? 'Contraseña restablecida' : 'Acceso generado', c.nombre)
     guardar()
     return temporal
+  },
+  /** Perdió o cambió de celular: borra su app autenticadora; al entrar configurará una nueva */
+  async restablecer2fa(id: string, actor: Actor): Promise<void> {
+    if (hayApi) return api<void>(`/api/admin/usuarios/${encodeURIComponent(id)}/restablecer-2fa`, { metodo: 'POST' })
+    await espera()
+    const c = buscar(id)
+    if (id === actor.id) throw new Error('Para cambiar tu propia app autenticadora usa tu perfil.')
+    actualizar(id, { totp: undefined, totpPendiente: undefined, totpUltimo: undefined, codigoDemo: false, sesionesCerradasEn: new Date() })
+    anotar(actor, 'Verificación en dos pasos restablecida', c.nombre)
+    guardar()
   },
   /** Saca a la persona de todos sus dispositivos (por ejemplo si perdió el celular) */
   async cerrarSesiones(id: string, actor: Actor): Promise<void> {

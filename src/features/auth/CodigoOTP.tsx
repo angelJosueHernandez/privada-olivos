@@ -9,12 +9,14 @@ const LARGO = 6
   pegar el código completo y borrar con el teclado, sin saltar de un campo a otro.
   Los cuadros solo dibujan lo que hay en ese input.
 */
-export default function CodigoOTP({ valor, onCambio, invalido, describe, deshabilitado }: {
+export default function CodigoOTP({ valor, onCambio, invalido, describe, deshabilitado, autoFoco = true }: {
   valor: string
   onCambio: (v: string) => void
   invalido?: boolean
   describe?: string
   deshabilitado?: boolean
+  /** false: no abre el teclado al aparecer (cuando hay pasos antes del código) */
+  autoFoco?: boolean
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const [enfocado, setEnfocado] = useState(false)
@@ -50,7 +52,7 @@ export default function CodigoOTP({ valor, onCambio, invalido, describe, deshabi
         id="codigo"
         className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-text text-[16px] caret-transparent"
         inputMode="numeric" pattern="[0-9]*" maxLength={LARGO}
-        autoComplete="one-time-code" autoFocus required disabled={deshabilitado}
+        autoComplete="one-time-code" autoFocus={autoFoco} required disabled={deshabilitado}
         aria-label="Código de verificación de 6 dígitos"
         aria-invalid={invalido} aria-describedby={describe}
         value={valor}
@@ -74,7 +76,7 @@ export default function CodigoOTP({ valor, onCambio, invalido, describe, deshabi
                     ? 'bg-peligro/[0.05] ring-1 ring-inset ring-peligro/60'
                     : esActivo
                       ? 'bg-panel ring-[1.5px] ring-inset ring-acento'
-                      : digito ? 'bg-panel ring-1 ring-inset ring-borde' : 'bg-fondo'}`}>
+                      : digito ? 'bg-panel ring-1 ring-inset ring-borde' : 'bg-fondo ring-1 ring-inset ring-borde/60'}`}>
                 {digito}
                 {esActivo && !digito && (
                   <span className="absolute h-7 w-[2px] rounded-full bg-acento anim-parpadeo" />

@@ -4,6 +4,8 @@ import Icon, { IconName } from '../../shared/ui/Icon'
 import Marca from '../../shared/ui/Marca'
 import PanelLogin, { ListaFunciones } from './PanelLogin'
 import CodigoOTP from './CodigoOTP'
+import ConfigurarAutenticador from './ConfigurarAutenticador'
+import { authService } from './authService'
 import { rutaInicio, useAuth } from './AuthContext'
 import { LIMITES } from './authService'
 
@@ -59,7 +61,7 @@ const entrada =
 type Fallo = 'email' | 'password' | 'ambos' | 'codigo' | null
 
 export default function LoginPage() {
-  const { user, pendiente2fa, login, verificar2fa, logout } = useAuth()
+  const { user, pendiente2fa, configurar2fa, activar2fa, login, verificar2fa, logout, pendienteUsuario } = useAuth()
   const [email, setEmail] = useState(leerEmail)
   const [recordar, setRecordar] = useState(() => leerEmail() !== '')
   const [password, setPassword] = useState('')
@@ -161,7 +163,22 @@ export default function LoginPage() {
       {/* Celular primero: una columna centrada; tableta: la misma columna a 400px; computadora: mitad derecha */}
       <section className="min-h-dvh flex flex-col items-center justify-center
         px-6 md:px-10 lg:px-16 pt-[calc(env(safe-area-inset-top)+3rem)] pb-[calc(env(safe-area-inset-bottom)+2.5rem)] md:py-20">
-        <div key={pendiente2fa ? 'codigo' : 'acceso'} className="anim-entrar w-full max-w-[400px]">
+        <div key={configurar2fa ? 'configurar' : pendiente2fa ? 'codigo' : 'acceso'} className="anim-entrar w-full max-w-[400px]">
+          {configurar2fa && pendienteUsuario ? (
+            <>
+              <header className="flex flex-col items-center text-center lg:items-start lg:text-left">
+                <span className="lg:hidden grid place-items-center h-[72px] w-[72px] rounded-[20px] bg-acento/[0.1] text-acento"><Icon n="candado" size={34} stroke={1.7} /></span>
+                <h1 className="titulo-grande mt-6 lg:mt-0 text-balance">Protege tu cuenta</h1>
+                <p className="mt-2 text-[1.0625rem] leading-[1.4] text-suave text-balance">
+                  Cada vez que entres te pediremos un código de tu celular. Así nadie más puede usar tu cuenta aunque sepa tu contraseña.
+                </p>
+              </header>
+              <div className="mt-8">
+                <ConfigurarAutenticador iniciar={() => authService.iniciar2fa(pendienteUsuario)} onCodigo={activar2fa} />
+              </div>
+              <button type="button" onClick={volver} className="btn-secundario w-full mt-8">Salir</button>
+            </>
+          ) : (<>
 
           {/* Encabezado: centrado en celular y tableta, alineado a la izquierda en computadora */}
           <header className="flex flex-col items-center text-center lg:items-start lg:text-left">
@@ -297,6 +314,7 @@ export default function LoginPage() {
               <ListaFunciones />
             </div>
           )}
+          </>)}
         </div>
       </section>
     </main>
