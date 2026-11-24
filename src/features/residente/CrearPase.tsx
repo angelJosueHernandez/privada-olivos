@@ -2,6 +2,8 @@ import { FormEvent, ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 import { Opciones } from '../../shared/ui/Opciones'
 import Icon from '../../shared/ui/Icon'
+import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { DiaPase, HORARIOS, HorarioPase, MOTIVOS, NuevoPase } from '../caseta/tipos'
 
 function Seccion({ titulo, nota, children, retraso = 0 }: { titulo: string; nota?: string; children: ReactNode; retraso?: number }) {
@@ -36,6 +38,10 @@ export default function CrearPase({ idFormulario, onCrear }: { idFormulario: str
   const [placas, setPlacas] = useState('')
   const [error, setError] = useState('')
 
+  const v = useValidacion({
+    visitante: validar.nombre(visitante),
+    placas: enVehiculo === 'SI' ? validar.placa(placas, true) : '',
+  }, 'pase')
   const horarios = horariosDisponibles(dia)
   const cambiarDia = (d: DiaPase) => {
     setDia(d)
@@ -44,9 +50,9 @@ export default function CrearPase({ idFormulario, onCrear }: { idFormulario: str
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
-    const nombre = visitante.trim().replace(/\s+/g, ' ')
-    const placa = placas.toUpperCase().replace(/[^A-Z0-9-]/g, '')
-    const falta = nombre.length < 3 ? 'Escribe el nombre de tu visita.' : !horario ? 'Elige el horario.' : enVehiculo === 'SI' && placa && placa.replace(/-/g, '').length < 5 ? 'Revisa las placas.' : ''
+    const nombre = visitante.trim()
+    const placa = placas.replace(/-$/, '')
+    const falta = v.revisar() || (!horario ? 'Elige el horario.' : '')
     if (falta) { setError(falta); toast.error(falta); return }
     setError('')
     await onCrear({
@@ -59,9 +65,10 @@ export default function CrearPase({ idFormulario, onCrear }: { idFormulario: str
     <form id={idFormulario} onSubmit={enviar} noValidate className="space-y-8">
       <Seccion titulo="¿Quién te visita?">
         <label htmlFor="visitante" className="sr-only">Nombre de la visita</label>
-        <input id="visitante" className={campo} value={visitante} onChange={(e) => setVisitante(e.target.value)}
-          placeholder="Nombre y apellido" autoComplete="off" autoCapitalize="words" maxLength={80} enterKeyHint="done" />
-        <p className="mt-2 px-1 text-[0.8125rem] text-suave">El guardia lo verá al escanear el código para confirmar quién es.</p>
+        <input id="visitante" className={`${campo} ${CAMPO_INVALIDO}`} value={visitante} onChange={(e) => setVisitante(filtrar.nombre(e.target.value))}
+          placeholder="Nombre y apellido" autoComplete="off" autoCapitalize="words" maxLength={LARGO.nombre} enterKeyHint="done" {...v.props('visitante')} />
+        {v.error('visitante') ? <MensajeCampo id={v.idError('visitante')} mensaje={v.error('visitante')} />
+          : <p className="mt-2 px-1 text-[0.8125rem] text-suave">El guardia lo verá al escanear el código para confirmar quién es.</p>}
       </Seccion>
 
       <Seccion titulo="Motivo" nota="Opcional" retraso={40}>
@@ -97,10 +104,11 @@ export default function CrearPase({ idFormulario, onCrear }: { idFormulario: str
         {enVehiculo === 'SI' && (
           <div className="anim-llenar mt-3">
             <label htmlFor="placas" className="mb-1.5 block px-1 text-[0.875rem] font-medium">Placas <span className="font-normal text-suave">(opcional)</span></label>
-            <input id="placas" className={`${campo} font-semibold uppercase tracking-[0.08em]`} value={placas}
-              onChange={(e) => setPlacas(e.target.value.toUpperCase())} placeholder="ABC-123-D" autoComplete="off"
-              autoCapitalize="characters" spellCheck={false} maxLength={12} enterKeyHint="done" />
-            <p className="mt-2 px-1 text-[0.8125rem] text-suave">El guardia revisará que las placas coincidan al llegar.</p>
+            <input id="placas" className={`${campo} ${CAMPO_INVALIDO} font-semibold uppercase tracking-[0.08em]`} value={placas}
+              onChange={(e) => setPlacas(filtrar.placa(e.target.value))} placeholder="ABC-123-D" autoComplete="off"
+              autoCapitalize="characters" spellCheck={false} maxLength={LARGO.placa} enterKeyHint="done" {...v.props('placas')} />
+            {v.error('placas') ? <MensajeCampo id={v.idError('placas')} mensaje={v.error('placas')} />
+              : <p className="mt-2 px-1 text-[0.8125rem] text-suave">El guardia revisará que las placas coincidan al llegar.</p>}
           </div>
         )}
       </Seccion>

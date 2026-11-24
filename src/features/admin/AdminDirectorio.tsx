@@ -6,6 +6,8 @@ import Icon, { IconName } from '../../shared/ui/Icon'
 import { Opciones } from '../../shared/ui/Opciones'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Vacio from '../../shared/ui/Vacio'
+import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { useAuth } from '../auth/AuthContext'
 import type { Rol } from '../auth/authService'
 import SelectorCasa from '../caseta/SelectorCasa'
@@ -159,7 +161,7 @@ function ListaCuentas({ cuentas, yo, onAbrir }: { cuentas: Cuenta[]; yo: string;
         <label className="relative block">
           <span className="sr-only">Buscar usuario</span>
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-texto/45"><Icon n="buscar" size={18} /></span>
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} maxLength={60} placeholder="Buscar nombre, correo o casa"
+          <input type="search" value={q} onChange={(e) => setQ(filtrar.linea(e.target.value, LARGO.busqueda))} maxLength={LARGO.busqueda} placeholder="Buscar nombre, correo o casa"
             className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-texto/45" />
         </label>
         <Opciones etiqueta="Filtrar" valor={filtro} onCambio={setFiltro}
@@ -211,7 +213,7 @@ function ListaCasas({ casas, cuentas, onAbrir }: { casas: Casa[]; cuentas: Cuent
         <label className="relative block min-w-0 flex-1 basis-56">
           <span className="sr-only">Buscar casa</span>
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-texto/45"><Icon n="buscar" size={18} /></span>
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} maxLength={40} placeholder="Buscar calle o número"
+          <input type="search" value={q} onChange={(e) => setQ(filtrar.linea(e.target.value, 40))} maxLength={40} placeholder="Buscar calle o número"
             className="block w-full h-12 rounded-[14px] bg-panel pl-11 pr-4 text-[1rem] shadow-tarjeta outline-none ring-1 ring-inset ring-transparent focus:ring-2 focus:ring-acento placeholder:text-texto/45" />
         </label>
         {hayInactivas && (
@@ -455,14 +457,20 @@ function FormCuenta({ inicial, casaInicial, esYo, onGuardar }: { inicial?: Cuent
   const [casa, setCasa] = useState(inicial?.casa ?? casaInicial ?? '')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
-  const delicado = inicial && !esYo && (rol !== inicial.rol || (rol === 'RESIDENTE' && casa !== inicial.casa) || email.trim().toLowerCase() !== inicial.email)
+  const v = useValidacion({
+    nombre: validar.nombreCompleto(nombre),
+    email: validar.email(email),
+    telefono: validar.telefono(telefono, true),
+    casa: rol === 'RESIDENTE' && !casa ? 'Elige la casa del residente.' : '',
+  }, 'cuenta')
+  const delicado = inicial && !esYo && (rol !== inicial.rol || (rol === 'RESIDENTE' && casa !== inicial.casa) || email !== inicial.email)
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
     if (enviando) return
-    if (rol === 'RESIDENTE' && !casa) { setError('Elige la casa del residente.'); return }
+    if (v.revisar()) { setError('Revisa los campos marcados.'); return }
     setError(''); setEnviando(true)
-    try { await onGuardar({ nombre, email, telefono, rol, casa: rol === 'RESIDENTE' ? casa : undefined }) }
+    try { await onGuardar({ nombre: nombre.trim(), email, telefono: telefono || undefined, rol, casa: rol === 'RESIDENTE' ? casa : undefined }) }
     catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar') }
     finally { setEnviando(false) }
   }
@@ -470,21 +478,27 @@ function FormCuenta({ inicial, casaInicial, esYo, onGuardar }: { inicial?: Cuent
     <form id="form-cuenta" onSubmit={enviar} noValidate className="space-y-6">
       <div>
         <label htmlFor="c-nombre" className="mb-2 block text-[1.0625rem] font-semibold">Nombre completo</label>
-        <input id="c-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} autoComplete="off" className={`${campo} h-14`} placeholder="Ej. Ana López" />
+        <input id="c-nombre" value={nombre} onChange={(e) => setNombre(filtrar.nombre(e.target.value))} maxLength={LARGO.nombre} autoComplete="off" autoCapitalize="words"
+          className={`${campo} ${CAMPO_INVALIDO} h-14`} placeholder="Ej. Ana López" {...v.props('nombre')} />
+        <MensajeCampo id={v.idError('nombre')} mensaje={v.error('nombre')} />
       </div>
       <div>
         <label htmlFor="c-email" className="mb-2 block text-[1.0625rem] font-semibold">Correo</label>
-        <input id="c-email" type="email" inputMode="email" autoCapitalize="none" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} className={`${campo} h-14`} placeholder="ana@correo.com" />
-        <p className="mt-1.5 px-1 text-[0.8125rem] text-suave">Con este correo entrará a la app.</p>
+        <input id="c-email" type="email" inputMode="email" autoCapitalize="none" autoComplete="off" spellCheck={false} value={email}
+          onChange={(e) => setEmail(filtrar.email(e.target.value))} maxLength={LARGO.email} className={`${campo} ${CAMPO_INVALIDO} h-14`} placeholder="ana@correo.com" {...v.props('email')} />
+        {v.error('email') ? <MensajeCampo id={v.idError('email')} mensaje={v.error('email')} /> : <p className="mt-1.5 px-1 text-[0.8125rem] text-suave">Con este correo entrará a la app.</p>}
       </div>
       <div>
         <label htmlFor="c-tel" className="mb-2 block text-[1.0625rem] font-semibold">Teléfono <span className="font-normal text-suave">(opcional)</span></label>
-        <input id="c-tel" type="tel" inputMode="tel" autoComplete="off" value={telefono} onChange={(e) => setTelefono(e.target.value)} maxLength={16} className={`${campo} h-14 cifras`} placeholder="10 dígitos" />
+        <input id="c-tel" type="tel" inputMode="numeric" pattern="[0-9]*" autoComplete="off" value={telefono} onChange={(e) => setTelefono(filtrar.telefono(e.target.value))}
+          maxLength={LARGO.telefono} className={`${campo} ${CAMPO_INVALIDO} h-14 cifras tracking-[0.04em]`} placeholder="10 dígitos" {...v.props('telefono')} />
+        {v.error('telefono') ? <MensajeCampo id={v.idError('telefono')} mensaje={v.error('telefono')} />
+          : <p className="mt-1.5 px-1 text-[0.8125rem] text-suave cifras">{telefono ? `${telefono.length} de 10 dígitos` : 'Solo números, sin lada (+52).'}</p>}
       </div>
       <div>
         <h3 className="mb-3 text-[1.0625rem] font-semibold">Rol</h3>
         {esYo ? <p className="text-[0.9375rem] text-suave">{ETIQUETA_ROL[rol]} · no puedes cambiar tu propio rol.</p> : (
-          <Opciones etiqueta="Rol" valor={rol} opcional={false} onCambio={(v) => v && setRol(v)}
+          <Opciones etiqueta="Rol" valor={rol} opcional={false} onCambio={(r) => r && setRol(r)}
             opciones={(['RESIDENTE', 'GUARDIA', 'ADMIN'] as Rol[]).map((r) => ({ valor: r, etiqueta: ETIQUETA_ROL[r], extra: <Icon n={ICONO_ROL[r]} size={16} /> }))} />
         )}
         {rol === 'ADMIN' && !esYo && <p className="mt-3 rounded-[14px] bg-alerta/[0.1] px-4 py-3 text-[0.875rem] text-texto/85">Administración puede ver pagos, datos de todas las casas y dar de alta o suspender usuarios.</p>}
@@ -493,6 +507,7 @@ function FormCuenta({ inicial, casaInicial, esYo, onGuardar }: { inicial?: Cuent
         <div className="anim-llenar">
           <h3 className="mb-3 text-[1.0625rem] font-semibold">Casa {casa && <span className="font-normal text-suave">· {casa}</span>}</h3>
           <SelectorCasa valor={casa} onCambio={setCasa} />
+          <MensajeCampo id={v.idError('casa')} mensaje={v.error('casa')} />
         </div>
       )}
       {delicado && <p className="rounded-[14px] bg-alerta/[0.1] px-4 py-3 text-[0.875rem] text-texto/85">Al cambiar rol, casa o correo se cerrará su sesión para que entre con los permisos nuevos.</p>}
@@ -509,11 +524,18 @@ function FormCasa({ onGuardar }: { onGuardar: (d: { calle: string; numero: strin
   const [notas, setNotas] = useState('')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const nombreCalle = calle === 'OTRA' ? otra.trim() : calle ?? ''
+  const repetida = calle === 'OTRA' && calles.some((c) => normal(c) === normal(otra.trim()))
+  const v = useValidacion({
+    calle: calle === 'OTRA' ? validar.calle(otra) || (repetida ? 'Esa calle ya existe: elígela arriba.' : '') : '',
+    numero: validar.numeroCasa(numero) || (directorioService.casasActivas().some((c) => normal(c) === normal(`Calle ${nombreCalle} ${numero}`)) ? 'Esa casa ya está dada de alta.' : ''),
+  }, 'casa')
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
     if (enviando) return
+    if (v.revisar()) { setError('Revisa los campos marcados.'); return }
     setError(''); setEnviando(true)
-    try { await onGuardar({ calle: calle === 'OTRA' ? otra : calle ?? '', numero, notas }) }
+    try { await onGuardar({ calle: nombreCalle, numero, notas: notas.trim() }) }
     catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar') }
     finally { setEnviando(false) }
   }
@@ -521,22 +543,27 @@ function FormCasa({ onGuardar }: { onGuardar: (d: { calle: string; numero: strin
     <form id="form-casa" onSubmit={enviar} noValidate className="space-y-6">
       <div>
         <h3 className="mb-3 text-[1.0625rem] font-semibold">Calle</h3>
-        <Opciones etiqueta="Calle" valor={calle} opcional={false} onCambio={(v) => v && setCalle(v)}
+        <Opciones etiqueta="Calle" valor={calle} opcional={false} onCambio={(c) => c && setCalle(c)}
           opciones={[...calles.map((c) => ({ valor: c, etiqueta: c })), { valor: 'OTRA', etiqueta: 'Calle nueva', extra: <Icon n="mas" size={16} /> }]} />
         {calle === 'OTRA' && (
-          <input value={otra} onChange={(e) => setOtra(e.target.value)} maxLength={30} aria-label="Nombre de la calle nueva" placeholder="Ej. Sauce"
-            className={`${campo} anim-llenar mt-3 h-14`} />
+          <>
+            <input value={otra} onChange={(e) => setOtra(filtrar.calle(e.target.value))} maxLength={LARGO.calle} aria-label="Nombre de la calle nueva" placeholder="Ej. Sauce"
+              autoCapitalize="words" className={`${campo} ${CAMPO_INVALIDO} anim-llenar mt-3 h-14`} {...v.props('calle')} />
+            <MensajeCampo id={v.idError('calle')} mensaje={v.error('calle')} />
+          </>
         )}
       </div>
       <div>
         <label htmlFor="casa-num" className="mb-2 block text-[1.0625rem] font-semibold">Número</label>
-        <input id="casa-num" value={numero} onChange={(e) => setNumero(e.target.value.toUpperCase())} maxLength={6} inputMode="text" autoComplete="off"
-          className={`${campo} h-14 cifras`} placeholder="Ej. 111 o 12B" />
-        <p className="mt-1.5 px-1 text-[0.8125rem] text-suave">La dirección no se puede cambiar después porque los pagos y accesos quedan ligados a ella.</p>
+        <input id="casa-num" value={numero} onChange={(e) => setNumero(filtrar.numeroCasa(e.target.value))} maxLength={LARGO.numeroCasa} inputMode="text" autoComplete="off"
+          autoCapitalize="characters" className={`${campo} ${CAMPO_INVALIDO} h-14 cifras`} placeholder="Ej. 111 o 12B" {...v.props('numero')} />
+        {v.error('numero') ? <MensajeCampo id={v.idError('numero')} mensaje={v.error('numero')} />
+          : <p className="mt-1.5 px-1 text-[0.8125rem] text-suave">La dirección no se puede cambiar después porque los pagos y accesos quedan ligados a ella.</p>}
       </div>
       <div>
         <label htmlFor="casa-notas" className="mb-2 block text-[1.0625rem] font-semibold">Notas <span className="font-normal text-suave">(opcional)</span></label>
-        <textarea id="casa-notas" value={notas} onChange={(e) => setNotas(e.target.value)} maxLength={200} rows={3} className={`${campo} py-3 resize-y`} placeholder="Ej. Casa en renta, esquina con área verde" />
+        <textarea id="casa-notas" value={notas} onChange={(e) => setNotas(filtrar.texto(e.target.value, LARGO.notaCorta))} maxLength={LARGO.notaCorta} rows={3} className={`${campo} py-3 resize-y`} placeholder="Ej. Casa en renta, esquina con área verde" />
+        <p className="mt-1 px-1 text-right text-[0.8125rem] text-suave cifras">{notas.length}/{LARGO.notaCorta}</p>
       </div>
       {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}
     </form>
@@ -594,7 +621,7 @@ function DetalleCasa({ casa: c, cuentas, actor, onCuenta, onAgregar }: { casa: C
 
       <section>
         <label htmlFor="det-notas" className="mb-2 block px-1 text-[1.0625rem] font-semibold">Notas</label>
-        <textarea id="det-notas" value={notas} onChange={(e) => setNotas(e.target.value)} maxLength={200} rows={2} className={`${campo} py-3 resize-y`} placeholder="Solo las ve la administración" />
+        <textarea id="det-notas" value={notas} onChange={(e) => setNotas(filtrar.texto(e.target.value, LARGO.notaCorta))} maxLength={LARGO.notaCorta} rows={2} className={`${campo} py-3 resize-y`} placeholder="Solo las ve la administración" />
         {notas !== (c.notas ?? '') && <button type="button" onClick={() => guardar(c.activa, 'Notas guardadas')} disabled={ocupado} className="anim-llenar mt-2 btn-secundario btn-chico">Guardar notas</button>}
       </section>
 

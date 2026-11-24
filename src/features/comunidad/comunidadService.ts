@@ -3,6 +3,7 @@ import { casetaService } from '../caseta/casetaService'
 import { directorioService } from '../directorio/directorioService'
 import type { Actor } from '../caseta/tipos'
 import { COBRO } from './config'
+import { validar } from '../../shared/validacion'
 import {
   anuncioPara, anuncioVigente, MAX_PERSONAS, nombrePeriodo, pesos, type Anuncio, type CobranzaCasa, type Comprobante, type Cuota, type NuevoAnuncio, type NuevoComprobante,
   type Respuesta, type ValorRespuesta,
@@ -163,6 +164,8 @@ export const comunidadService = {
     guardar()
   },
   async publicarAnuncio(datos: NuevoAnuncio, actor: Actor): Promise<Anuncio> {
+    const error = validar.texto(datos.titulo, 4, 'el título') || validar.texto(datos.cuerpo, 10, 'el mensaje')
+    if (error) throw new Error(error)
     if (hayApi) return revivirAnuncio(await api<Anuncio>('/api/anuncios', { metodo: 'POST', cuerpo: datos }))
     await espera()
     const a: Anuncio = { ...datos, id: crypto.randomUUID(), publicadoPor: actor, publicadoEn: new Date() }

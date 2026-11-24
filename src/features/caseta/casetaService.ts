@@ -1,4 +1,5 @@
 import { api, hayApi } from '../../shared/api/cliente'
+import { filtrar, validar } from '../../shared/validacion'
 import {
   HORARIOS, type Acceso, type Actor, type Aviso, type LecturaPlaca, type NuevoAcceso, type NuevoPase, type Pase,
   type PaseResidente, type Validacion,
@@ -205,6 +206,10 @@ export const casetaService = {
   },
 
   async registrarManual(datos: NuevoAcceso, evidencias: { blob: Blob; etiqueta: string }[], actor: Actor): Promise<Acceso> {
+    // Mismas reglas que la pantalla (con API, el servidor las repite). La placa leída por la IA se normaliza.
+    if (datos.placas) datos = { ...datos, placas: filtrar.placa(datos.placas).replace(/-$/, '') }
+    const error = (datos.tipo === 'VISITA_SIN_QR' ? validar.nombre(datos.nombre) : validar.empresa(datos.nombre)) || (datos.placas ? validar.placa(datos.placas) : '')
+    if (error) throw new Error(error)
     if (hayApi) {
       const form = new FormData()
       form.append('datos', new Blob([JSON.stringify(datos)], { type: 'application/json' }))
@@ -301,6 +306,8 @@ export const casetaService = {
 
   /** Crea un pase de visita. Con API: el servidor genera el código y valida que la casa sea la del usuario. */
   async crearPase(datos: NuevoPase, actor: Actor): Promise<PaseResidente> {
+    const error = validar.nombre(datos.visitante) || validar.placa(datos.placas ?? '', true)
+    if (error) throw new Error(error)
     if (hayApi) return revivirPase(await api<PaseResidente>('/api/pases', { metodo: 'POST', cuerpo: datos }))
     await espera(500)
     const h = HORARIOS.find((x) => x.valor === datos.horario) ?? HORARIOS[0]

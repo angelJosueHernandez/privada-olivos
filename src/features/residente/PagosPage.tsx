@@ -5,6 +5,8 @@ import Hoja from '../../shared/ui/Hoja'
 import Icon from '../../shared/ui/Icon'
 import { Opciones, OpcionesMultiples } from '../../shared/ui/Opciones'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
+import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { useAuth } from '../auth/AuthContext'
 import type { Actor } from '../caseta/tipos'
 import { prepararFoto } from '../caseta/fotos'
@@ -206,13 +208,20 @@ function FormComprobante({ porPagar, onEnviar }: {
     finally { setProcesando(false) }
   }
 
+  // "Otro día": hasta 6 meses atrás y nunca en el futuro
+  const minFecha = fechaLocal(new Date(Date.now() - 183 * 86_400_000))
+  const errorFecha = cuando !== 'OTRO' ? '' : !otraFecha ? 'Elige la fecha del pago.'
+    : otraFecha > fechaLocal() ? 'La fecha no puede ser futura.' : otraFecha < minFecha ? 'Es de hace más de 6 meses: entrégalo en la administración.' : ''
+  const v = useValidacion({ fecha: errorFecha, referencia: validar.referencia(referencia) }, 'pago')
+
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
     const fechaPago = cuando === 'HOY' ? new Date() : cuando === 'AYER' ? new Date(Date.now() - 86_400_000) : otraFecha ? new Date(`${otraFecha}T12:00:00`) : null
-    const falta = !periodos.length ? 'Elige qué meses pagas.' : !metodo ? 'Elige cómo pagaste.' : !fechaPago || isNaN(fechaPago.getTime()) || fechaPago.getTime() > Date.now() + 86_400_000 ? 'Revisa la fecha del pago.' : !imagen ? 'Agrega la foto o captura del comprobante.' : ''
+    const campos = v.revisar()
+    const falta = !periodos.length ? 'Elige qué meses pagas.' : !metodo ? 'Elige cómo pagaste.' : campos || (!fechaPago || isNaN(fechaPago.getTime()) ? 'Revisa la fecha del pago.' : !imagen ? 'Agrega la foto o captura del comprobante.' : '')
     if (falta) { setError(falta); toast.error(falta); return }
     setError('')
-    await onEnviar({ periodos, monto, metodo: metodo!, fechaPago: fechaPago!, referencia: referencia.trim().slice(0, 40) || undefined }, imagen!.blob)
+    await onEnviar({ periodos, monto, metodo: metodo!, fechaPago: fechaPago!, referencia: referencia.trim() || undefined }, imagen!.blob)
   }
 
   if (!porPagar.length) return <p className="text-center text-[1rem] text-suave py-10">No tienes pagos pendientes.</p>
@@ -236,8 +245,11 @@ function FormComprobante({ porPagar, onEnviar }: {
         <Opciones etiqueta="Fecha" valor={cuando} opcional={false} onCambio={(v) => v && setCuando(v)} cuadricula="grid grid-cols-3 gap-2"
           opciones={[{ valor: 'HOY' as const, etiqueta: 'Hoy' }, { valor: 'AYER' as const, etiqueta: 'Ayer' }, { valor: 'OTRO' as const, etiqueta: 'Otro día' }]} />
         {cuando === 'OTRO' && (
-          <input type="date" value={otraFecha} onChange={(e) => setOtraFecha(e.target.value)} max={fechaLocal()} aria-label="Fecha del pago"
-            className="anim-llenar mt-3 block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-2 focus:ring-acento" />
+          <>
+            <input type="date" value={otraFecha} onChange={(e) => setOtraFecha(e.target.value)} min={minFecha} max={fechaLocal()} aria-label="Fecha del pago" {...v.props('fecha')}
+              className={`anim-llenar mt-3 block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-2 focus:ring-acento ${CAMPO_INVALIDO}`} />
+            <MensajeCampo id={v.idError('fecha')} mensaje={v.error('fecha')} />
+          </>
         )}
       </section>
 
@@ -264,8 +276,11 @@ function FormComprobante({ porPagar, onEnviar }: {
 
       <section className="anim-entrar" style={{ animationDelay: '160ms' }}>
         <label htmlFor="ref" className="mb-1.5 block text-[1.0625rem] font-semibold">Folio o clave de rastreo <span className="font-normal text-[0.9375rem] text-suave">(opcional)</span></label>
-        <input id="ref" value={referencia} onChange={(e) => setReferencia(e.target.value)} maxLength={40} autoComplete="off" spellCheck={false}
-          className="block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-2 focus:ring-acento" />
+        <input id="ref" value={referencia} onChange={(e) => setReferencia(filtrar.referencia(e.target.value))} maxLength={LARGO.referencia} autoComplete="off" spellCheck={false}
+          autoCapitalize="characters" placeholder="Ej. MBAN01002511230012" {...v.props('referencia')}
+          className={`block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] tracking-[0.02em] ring-1 ring-inset ring-borde outline-none focus:ring-2 focus:ring-acento placeholder:text-texto/35 ${CAMPO_INVALIDO}`} />
+        {v.error('referencia') ? <MensajeCampo id={v.idError('referencia')} mensaje={v.error('referencia')} />
+          : <p className="mt-1.5 px-1 text-[0.8125rem] text-suave">Letras y números, como aparece en tu comprobante.</p>}
       </section>
 
       {error && <p role="alert" className="anim-sacudir rounded-[14px] bg-peligro/[0.08] px-4 py-3 text-[0.9375rem] font-medium text-peligro">{error}</p>}

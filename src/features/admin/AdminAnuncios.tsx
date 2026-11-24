@@ -6,6 +6,8 @@ import Icon from '../../shared/ui/Icon'
 import { Opciones } from '../../shared/ui/Opciones'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Vacio from '../../shared/ui/Vacio'
+import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { useAuth } from '../auth/AuthContext'
 import { directorioService } from '../directorio/directorioService'
 import type { Actor } from '../caseta/tipos'
@@ -119,6 +121,10 @@ function FormAnuncio({ inicial, onGuardar }: { inicial?: Anuncio; onGuardar: (d:
   const [pide, setPide] = useState<PideRespuesta>(inicial?.pideRespuesta ?? 'NO')
   const [error, setError] = useState('')
   const hoy = fechaLocal()
+  const v = useValidacion({
+    titulo: validar.texto(titulo, 4, 'el título'),
+    cuerpo: validar.texto(cuerpo, 10, 'el mensaje'),
+  }, 'anuncio')
 
   const calcularVence = (): Date | undefined | null => {
     const d = new Date()
@@ -134,7 +140,7 @@ function FormAnuncio({ inicial, onGuardar }: { inicial?: Anuncio; onGuardar: (d:
     e.preventDefault()
     const t = titulo.trim(), c = cuerpo.trim()
     const vence = calcularVence()
-    const falta = t.length < 4 ? 'Escribe un título.' : c.length < 10 ? 'Escribe el mensaje.' : !categoria ? 'Elige una categoría.' : vence === null ? 'Elige una fecha a partir de hoy.' : ''
+    const falta = v.revisar() || (!categoria ? 'Elige una categoría.' : vence === null ? 'Elige una fecha a partir de hoy.' : '')
     if (falta) { setError(falta); toast.error(falta); return }
     setError('')
     await onGuardar({ titulo: t.slice(0, 90), cuerpo: c.slice(0, 2000), categoria: categoria!, importante, calle: calle === 'TODAS' ? undefined : calle, vence: vence ?? undefined, pideRespuesta: pide === 'NO' ? undefined : pide })
@@ -144,13 +150,17 @@ function FormAnuncio({ inicial, onGuardar }: { inicial?: Anuncio; onGuardar: (d:
     <form id={FORM} onSubmit={enviar} noValidate className="space-y-7">
       <div className="anim-entrar">
         <label htmlFor="titulo" className="mb-2 block text-[1.0625rem] font-semibold">Título</label>
-        <input id="titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={90} className={`${campo} h-14`} placeholder="Ej. Corte de agua el jueves" />
+        <input id="titulo" value={titulo} onChange={(e) => setTitulo(filtrar.linea(e.target.value, LARGO.titulo))} maxLength={LARGO.titulo} className={`${campo} ${CAMPO_INVALIDO} h-14`} placeholder="Ej. Corte de agua el jueves" {...v.props('titulo')} />
+        <MensajeCampo id={v.idError('titulo')} mensaje={v.error('titulo')} />
       </div>
       <div className="anim-entrar" style={{ animationDelay: '40ms' }}>
         <label htmlFor="cuerpo" className="mb-2 block text-[1.0625rem] font-semibold">Mensaje</label>
-        <textarea id="cuerpo" value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} maxLength={2000} rows={6} className={`${campo} py-3 leading-[1.5] resize-y`}
+        <textarea id="cuerpo" value={cuerpo} onChange={(e) => setCuerpo(filtrar.texto(e.target.value, LARGO.mensaje))} maxLength={LARGO.mensaje} rows={6} className={`${campo} ${CAMPO_INVALIDO} py-3 leading-[1.5] resize-y`} {...v.props('cuerpo')}
           placeholder="Qué pasa, cuándo y qué deben hacer los vecinos." />
-        <p className="mt-1 px-1 text-right text-[0.8125rem] text-suave cifras">{cuerpo.length}/2000</p>
+        <div className="mt-1 flex items-start justify-between gap-3">
+          <MensajeCampo id={v.idError('cuerpo')} mensaje={v.error('cuerpo')} />
+          <p className="ml-auto px-1 pt-1.5 text-[0.8125rem] text-suave cifras">{cuerpo.length}/{LARGO.mensaje}</p>
+        </div>
       </div>
       <div className="anim-entrar" style={{ animationDelay: '80ms' }}>
         <h3 className="mb-3 text-[1.0625rem] font-semibold">Categoría</h3>

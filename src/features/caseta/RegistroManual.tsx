@@ -6,6 +6,8 @@ import FotosGuiadas, { ApartadoFoto, FotoEvidencia, GUIAS, guiasPara } from './F
 import LectorPlaca from './LectorPlaca'
 import LogoEmpresa from './LogoEmpresa'
 import SelectorCasa from './SelectorCasa'
+import { CAMPO_INVALIDO, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
+import { filtrar, LARGO, validar } from '../../shared/validacion'
 import { casetaService } from './casetaService'
 import {
   Acceso, Color, COLORES, EMPRESAS, ETIQUETA_TIPO, ETIQUETAS, LecturaPlaca, NuevoAcceso, tienePlaca, Vehiculo, VEHICULOS,
@@ -118,6 +120,13 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
     ...guias.filter((g) => g.obligatoria && !fotos.some((f) => f.slot === g.id)).map((g) => g.titulo.toLowerCase()),
   ]
 
+  const esVisita = tipo === 'VISITA_SIN_QR'
+  const v = useValidacion({
+    nombre: paso === 'datos' && esVisita ? validar.nombre(nombre) : '',
+    empresa: paso === 'datos' && !esVisita ? (!empresa ? 'Elige la empresa.' : empresa === OTRA ? validar.empresa(otraEmpresa) : '') : '',
+    casa: paso === 'datos' && !casa ? 'Elige la casa destino.' : '',
+  }, 'registro')
+
   const enviar = (e: FormEvent) => {
     e.preventDefault()
     if (paso === 'fotos') {
@@ -126,9 +135,8 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
       setPaso('datos')
       return
     }
-    const esVisita = tipo === 'VISITA_SIN_QR'
     const quien = esVisita ? nombre.trim() : empresa === OTRA ? otraEmpresa.trim() : empresa
-    const falta = !quien ? (esVisita ? 'Escribe el nombre de la visita.' : 'Elige la empresa.') : !casa ? 'Elige la casa destino.' : ''
+    const falta = v.revisar()
     if (falta) { setError(falta); toast.error(falta); return }
     setError('')
     // Solo se envían las fotos que aplican al tipo y vehículo elegidos
@@ -237,17 +245,22 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
 
           <Seccion titulo={tipo === 'VISITA_SIN_QR' ? 'Nombre de la visita' : 'Empresa'} retraso={40}>
             {tipo === 'VISITA_SIN_QR' ? (
-              <input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} autoComplete="off" placeholder="Nombre completo"
-                className="block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave" />
+              <>
+                <input value={nombre} onChange={(e) => setNombre(filtrar.nombre(e.target.value))} maxLength={LARGO.nombre} autoComplete="off" autoCapitalize="words" placeholder="Nombre completo"
+                  aria-label="Nombre de la visita" {...v.props('nombre')}
+                  className={`block w-full h-14 rounded-[14px] bg-panel px-4 text-[1.0625rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave ${CAMPO_INVALIDO}`} />
+                <MensajeCampo id={v.idError('nombre')} mensaje={v.error('nombre')} />
+              </>
             ) : (
               <div className="space-y-3">
                 <Opciones etiqueta="Empresa" valor={empresa} onCambio={setEmpresa}
                   opciones={[...EMPRESAS[tipo], OTRA].map((e) => ({ valor: e, etiqueta: e, extra: <LogoEmpresa nombre={e} size={22} /> }))} />
                 {empresa === OTRA && (
-                  <input value={otraEmpresa} onChange={(e) => setOtraEmpresa(e.target.value)} maxLength={40} autoComplete="off" autoFocus
-                    placeholder="¿Cuál empresa?" aria-label="Otra empresa"
-                    className="anim-llenar block w-full h-12 rounded-[14px] bg-panel px-4 text-[1rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave" />
+                  <input value={otraEmpresa} onChange={(e) => setOtraEmpresa(filtrar.empresa(e.target.value))} maxLength={LARGO.empresa} autoComplete="off" autoFocus
+                    placeholder="¿Cuál empresa?" aria-label="Otra empresa" {...v.props('empresa')}
+                    className={`anim-llenar block w-full h-12 rounded-[14px] bg-panel px-4 text-[1rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave ${CAMPO_INVALIDO}`} />
                 )}
+                <MensajeCampo id={v.idError('empresa')} mensaje={v.error('empresa')} />
               </div>
             )}
           </Seccion>
@@ -264,6 +277,7 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
 
           <Seccion titulo="Casa destino" retraso={120} extra={casa && <span className="anim-llenar text-[0.9375rem] font-medium text-acento">{casa}</span>}>
             <SelectorCasa valor={casa} onCambio={setCasa} />
+            <MensajeCampo id={v.idError('casa')} mensaje={v.error('casa')} />
           </Seccion>
 
           {tipo === 'PAQUETERIA' && (
@@ -281,7 +295,7 @@ export default function RegistroManual({ idFormulario, onEnviar, onPaso }: {
             <div className="space-y-3">
               <OpcionesMultiples etiqueta="Detalles" opciones={ETIQUETAS[tipo]} valores={etiquetas} onCambio={setEtiquetas} />
               {conNota ? (
-                <textarea value={nota} onChange={(e) => setNota(e.target.value)} maxLength={280} rows={2} autoFocus aria-label="Nota"
+                <textarea value={nota} onChange={(e) => setNota(filtrar.texto(e.target.value, LARGO.nota))} maxLength={LARGO.nota} rows={2} autoFocus aria-label="Nota"
                   placeholder="Algo más que deba saberse"
                   className="anim-llenar block w-full rounded-[14px] bg-panel px-4 py-3 text-[1rem] ring-1 ring-inset ring-borde outline-none focus:ring-[1.5px] focus:ring-acento placeholder:text-suave resize-none" />
               ) : (

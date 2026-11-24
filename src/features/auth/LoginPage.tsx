@@ -7,6 +7,7 @@ import CodigoOTP from './CodigoOTP'
 import ConfigurarAutenticador from './ConfigurarAutenticador'
 import { authService } from './authService'
 import { rutaInicio, useAuth } from './AuthContext'
+import { filtrar } from '../../shared/validacion'
 import { LIMITES } from './authService'
 
 const CLAVE = 'privada.email'
@@ -215,7 +216,7 @@ export default function LoginPage() {
                   <Campo id="email" icono="correo" etiqueta="Correo electrónico">
                     <input id="email" className={entrada} type="email" inputMode="email" autoComplete="username" maxLength={LIMITES.email}
                       autoCapitalize="none" spellCheck={false} placeholder="Correo electrónico" required
-                      value={email} onChange={(e) => setEmail(e.target.value)}
+                      value={email} onChange={(e) => setEmail(filtrar.email(e.target.value))}
                       aria-invalid={invalido('email')} aria-describedby={describe} />
                   </Campo>
                   <Campo id="password" icono="candado" etiqueta="Contraseña"

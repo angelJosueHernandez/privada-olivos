@@ -1,9 +1,10 @@
 import { api, hayApi } from '../../shared/api/cliente'
 import type { Rol } from '../auth/authService'
+import { filtrar, validar } from '../../shared/validacion'
 import { generarSecreto, uriOtp, verificarTotp } from '../auth/totp'
 import type { Actor } from '../caseta/tipos'
 import {
-  CORREO, ETIQUETA_ROL, HORAS_TEMPORAL, nombreCasa, revisarPassword,
+  ETIQUETA_ROL, HORAS_TEMPORAL, nombreCasa, revisarPassword,
   type Cambio, type Casa, type Cuenta, type DatosCuenta, type NuevaCasa,
 } from './tipos'
 
@@ -124,16 +125,15 @@ const buscar = (id: string) => {
 }
 const actualizar = (id: string, cambios: Partial<CuentaGuardada>) => { demo.cuentas = demo.cuentas.map((c) => (c.id === id ? { ...c, ...cambios } : c)) }
 const adminsActivos = () => demo.cuentas.filter((c) => c.rol === 'ADMIN' && c.estado === 'ACTIVA')
-const limpiarTel = (t?: string) => (t ? t.replace(/\D/g, '').slice(-10) : '') || undefined
 
 /** Valida y normaliza los datos de una cuenta (en el demo; con API lo repite el servidor) */
 function validarCuenta(d: DatosCuenta, id?: string): DatosCuenta {
-  const nombre = d.nombre.trim().replace(/\s+/g, ' ')
-  const email = d.email.trim().toLowerCase()
-  const telefono = limpiarTel(d.telefono)
-  if (nombre.length < 3 || nombre.length > 80) throw new Error('Escribe el nombre completo.')
-  if (!CORREO.test(email) || email.length > 254) throw new Error('El correo no es válido.')
-  if (telefono && telefono.length !== 10) throw new Error('El teléfono debe tener 10 dígitos.')
+  // Se limpia con los mismos filtros de la pantalla (por si llega por otro camino) y se valida
+  const nombre = filtrar.nombre(d.nombre).trim()
+  const email = filtrar.email(d.email)
+  const telefono = filtrar.telefono(d.telefono ?? '') || undefined
+  const error = validar.nombreCompleto(nombre) || validar.email(email) || validar.telefono(telefono ?? '', true)
+  if (error) throw new Error(error)
   if (!(['ADMIN', 'RESIDENTE', 'GUARDIA'] as Rol[]).includes(d.rol)) throw new Error('Elige un rol.')
   if (d.rol === 'RESIDENTE' && !directorioService.casasActivas().includes(d.casa ?? '')) throw new Error('Elige la casa del residente.')
   if (demo.cuentas.some((c) => c.email === email && c.id !== id)) throw new Error('Ya hay una cuenta con ese correo.')
@@ -355,10 +355,10 @@ export const directorioService = {
   async crearCasa(datos: NuevaCasa, actor: Actor): Promise<Casa> {
     if (hayApi) return revivirCasa(await api<Casa>('/api/admin/casas', { metodo: 'POST', cuerpo: datos }))
     await espera()
-    const calle = datos.calle.trim().replace(/^calle\s+/i, '').replace(/\s+/g, ' ')
-    const numero = datos.numero.trim().toUpperCase()
-    if (!/^[\p{L}][\p{L} .'-]{1,29}$/u.test(calle)) throw new Error('Escribe el nombre de la calle (solo letras).')
-    if (!/^[0-9]{1,5}[A-Z]?$/.test(numero)) throw new Error('El número debe ser como 104 o 12B.')
+    const calle = filtrar.calle(datos.calle.replace(/^calle\s+/i, '')).trim()
+    const numero = filtrar.numeroCasa(datos.numero)
+    const error = validar.calle(calle) || validar.numeroCasa(numero)
+    if (error) throw new Error(error)
     const nombre = nombreCasa({ calle, numero })
     const existente = demo.casas.find((c) => nombreCasa(c).toLowerCase() === nombre.toLowerCase())
     if (existente) throw new Error(existente.activa ? 'Esa casa ya existe.' : 'Esa casa existe pero está desactivada. Reactívala desde su detalle.')

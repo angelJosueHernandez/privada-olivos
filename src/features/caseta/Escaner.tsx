@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
+import { filtrar, LARGO, validar } from '../../shared/validacion'
 import Icon from '../../shared/ui/Icon'
 
 type EstadoCamara = 'iniciando' | 'activa' | 'sin-permiso' | 'sin-camara' | 'error'
@@ -195,13 +196,13 @@ export default function Escaner({ onLeido }: { onLeido: (contenido: string) => v
           ¿No se puede leer? Escribe el código del pase
         </label>
         <div className="flex gap-2">
-          <input id="codigo-manual" value={manual} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
-            onChange={(e) => setManual(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+          <input id="codigo-manual" value={manual} maxLength={LARGO.codigoPase} autoComplete="off" autoCapitalize="characters" spellCheck={false}
+            onChange={(e) => setManual(filtrar.codigoPase(e.target.value))} inputMode="text"
             placeholder="OLV-0000-XX"
             className="flex-1 min-w-0 h-12 rounded-[14px] bg-white/10 px-4 text-[1.0625rem] font-medium tracking-[0.04em] text-white
               placeholder:text-white/40 outline-none focus:ring-[1.5px] focus:ring-white/70" />
           <button className="h-12 px-5 rounded-full bg-white text-black text-[1rem] font-semibold active:scale-[0.97] transition-transform duration-150 disabled:opacity-40"
-            disabled={!manual.trim()}>
+            disabled={!!validar.codigoPase(manual)}>
             Validar
           </button>
         </div>

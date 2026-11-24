@@ -112,6 +112,23 @@ esta página. La seguridad real vive en el servidor.
 - **Celular perdido**: la administración usa *Restablecer verificación en dos pasos* (queda en bitácora y cierra sesiones) **después de confirmar la identidad** en persona o por llamada. Opcional: códigos de recuperación de un solo uso.
 - **Demo**: el secreto se guarda en `localStorage` y se verifica en el navegador con Web Crypto; las cuentas de prueba aceptan `123456` hasta configurar una app.
 
+### 7f. Validación de campos
+
+Las reglas viven en `src/shared/validacion.ts` y la API debe aplicar **las mismas** (la del navegador es comodidad, no seguridad):
+
+| Campo | Regla |
+|---|---|
+| Teléfono | Solo dígitos, exactamente 10 (se quita lada +52/521 al pegar); no empieza en 0 ni repite un dígito |
+| Nombre de persona | Letras (acentos, ñ), espacio, punto, apóstrofo y guion; directorio exige nombre y apellido; visitas mínimo 3 letras |
+| Empresa | Además admite números y & |
+| Correo | Sin espacios, minúsculas, formato `usuario@dominio.tld`, máx. 254 |
+| Placas | A–Z, 0–9 y guion; 5 a 8 caracteres combinando letras y números |
+| Código de pase | `OLV-XXXX-XX` (se arma solo al escribir) |
+| Calle / número de casa | Letras / hasta 5 dígitos + una letra opcional (12B), distinto de 0 |
+| Referencia de pago | A–Z sin acentos, 0–9, espacio y guion; máx. 30 |
+| Textos libres | Sin caracteres de control ni invisibles (incluye los de dirección bidi), con límite de largo |
+| Fecha de pago | No futura y no más de 6 meses atrás |
+
 ### 7c. Notificaciones push
 - Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
   push responde 404/410.
