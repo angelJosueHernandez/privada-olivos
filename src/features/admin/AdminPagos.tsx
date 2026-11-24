@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import Encabezado from '../../shared/ui/Encabezado'
 import Icon from '../../shared/ui/Icon'
 import { Opciones } from '../../shared/ui/Opciones'
+import { Paginacion, usePaginacion } from '../../shared/ui/Paginacion'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import TarjetaAvisos from '../../shared/avisos/TarjetaAvisos'
 import { useAuth } from '../auth/AuthContext'
@@ -53,6 +54,7 @@ export default function AdminPagos() {
   const porEstado = (e: EstadoComprobante) => (lista ?? []).filter((c) => c.estado === e)
   const visibles = filtro === 'CASAS' ? [] : porEstado(filtro)
   const pendientes = porEstado('EN_REVISION')
+  const pag = usePaginacion(visibles, 20, filtro)
   const totalPendiente = pendientes.reduce((s, c) => s + c.monto, 0)
 
   return (
@@ -73,17 +75,16 @@ export default function AdminPagos() {
             ${filtro === 'CASAS' ? 'bg-panel text-texto shadow-[0_1px_3px_rgb(0_0_0/0.12)]' : 'text-texto/70'}`}>Casas</button>
       </div>
 
-      {filtro === 'CASAS' ? <TablaCobranza cobranza={cobranza} /> : (
-
-      <div className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
+      {filtro === 'CASAS' ? <TablaCobranza cobranza={cobranza} /> : (<>
+      <div ref={pag.ancla} className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
         {lista === null ? <div className="h-40 animate-pulse" /> : visibles.length === 0 ? (
           <div key={filtro} className="anim-entrar px-6 py-12 text-center">
             <p className="text-[1.0625rem] font-semibold">{filtro === 'EN_REVISION' ? 'Todo revisado' : 'Sin comprobantes'}</p>
             <p className="mt-1 text-[0.9375rem] text-suave">{filtro === 'EN_REVISION' ? 'Cuando un residente suba un comprobante aparecerá aquí.' : 'Aquí verás el historial de revisiones.'}</p>
           </div>
         ) : (
-          <ul key={filtro} className="divide-y divide-separador">
-            {visibles.map((c, i) => (
+          <ul key={`${filtro}-${pag.props.pagina}`} className="divide-y divide-separador">
+            {pag.visibles.map((c, i) => (
               <li key={c.id} className="anim-entrar" style={{ animationDelay: `${Math.min(i * 35, 210)}ms` }}>
                 <button type="button" onClick={() => setAbierto(c)}
                   className="flex w-full items-center gap-4 px-4 sm:px-5 py-4 text-left hover:bg-texto/[0.03] active:bg-texto/[0.05] transition-colors">
@@ -107,7 +108,8 @@ export default function AdminPagos() {
           </ul>
         )}
       </div>
-      )}
+      <Paginacion {...pag.props} nombre="comprobantes" />
+      </>)}
 
       {abierto && (
         <VerComprobante comprobante={abierto} onCerrar={cerrar}
@@ -134,9 +136,10 @@ export default function AdminPagos() {
 /* Cobranza por casa: quién debe, cuánto y desde cuándo. Ordenada por adeudo (lo urgente arriba). */
 function TablaCobranza({ cobranza }: { cobranza: CobranzaCasa[] | null }) {
   const [soloDeudores, setSoloDeudores] = useState(true)
+  const deudores = (cobranza ?? []).filter((c) => !c.alCorriente)
+  const filas = (soloDeudores ? deudores : cobranza ?? []).slice().sort((a, b) => b.atrasados.length - a.atrasados.length || b.adeudo - a.adeudo || a.casa.localeCompare(b.casa))
+  const pag = usePaginacion(filas, 20, soloDeudores)
   if (!cobranza) return <div className="h-40 rounded-[20px] bg-panel shadow-tarjeta animate-pulse" />
-  const deudores = cobranza.filter((c) => !c.alCorriente)
-  const filas = (soloDeudores ? deudores : cobranza).slice().sort((a, b) => b.atrasados.length - a.atrasados.length || b.adeudo - a.adeudo || a.casa.localeCompare(b.casa))
   return (
     <section aria-label="Cobranza por casa">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -146,7 +149,7 @@ function TablaCobranza({ cobranza }: { cobranza: CobranzaCasa[] | null }) {
           Solo con atraso
         </label>
       </div>
-      <div className="overflow-x-auto rounded-[20px] bg-panel shadow-tarjeta">
+      <div ref={pag.ancla} className="overflow-x-auto rounded-[20px] bg-panel shadow-tarjeta">
         <table className="w-full min-w-[480px] text-left text-[0.9375rem]">
           <thead className="text-[0.8125rem] text-suave">
             <tr className="border-b border-separador">
@@ -159,7 +162,7 @@ function TablaCobranza({ cobranza }: { cobranza: CobranzaCasa[] | null }) {
           <tbody className="divide-y divide-separador">
             {filas.length === 0 ? (
               <tr><td colSpan={4} className="px-4 py-10 text-center text-suave">Todas las casas están al corriente.</td></tr>
-            ) : filas.map((c) => (
+            ) : pag.visibles.map((c) => (
               <tr key={c.casa}>
                 <td className="px-4 py-3 font-medium whitespace-nowrap">{c.casa}</td>
                 <td className="px-4 py-3">
@@ -177,6 +180,7 @@ function TablaCobranza({ cobranza }: { cobranza: CobranzaCasa[] | null }) {
           </tbody>
         </table>
       </div>
+      <Paginacion {...pag.props} nombre="casas" />
     </section>
   )
 }

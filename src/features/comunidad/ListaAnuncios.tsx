@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Icon from '../../shared/ui/Icon'
+import { Paginacion, usePaginacion } from '../../shared/ui/Paginacion'
 import { Anuncio, anuncioVigente, CATEGORIAS, MAX_PERSONAS, Respuesta, ValorRespuesta } from './tipos'
 
 const VISTO = 'olv-anuncios-visto'
@@ -18,8 +19,10 @@ const cuando = (d: Date) => {
 }
 
 /* Lista de anuncios. Los importantes van arriba y resaltados; los largos se pueden expandir. */
-export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorrar, onEditar, onResponder, onVerRespuestas }: {
+export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorrar, onEditar, onResponder, onVerRespuestas, clave }: {
   anuncios: Anuncio[]
+  /** Al cambiar (p. ej. el filtro) se vuelve a la primera página */
+  clave?: string
   /** Anuncios publicados después de esta marca se muestran como "Nuevo" */
   vistoHasta?: number
   onBorrar?: (a: Anuncio) => void
@@ -31,9 +34,12 @@ export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorra
   onVerRespuestas?: (a: Anuncio) => void
 }) {
   const [abierto, setAbierto] = useState<string | null>(null)
+  const pag = usePaginacion(anuncios, 10, clave)
   return (
+    <>
+    <div ref={pag.ancla} />
     <ul className="space-y-3">
-      {anuncios.map((a, i) => {
+      {pag.visibles.map((a, i) => {
         const cat = CATEGORIAS.find((c) => c.valor === a.categoria) ?? CATEGORIAS[0]
         const largo = a.cuerpo.length > 160
         const expandido = abierto === a.id || !largo
@@ -84,6 +90,8 @@ export default function ListaAnuncios({ anuncios, vistoHasta = Infinity, onBorra
         )
       })}
     </ul>
+    <Paginacion {...pag.props} nombre="anuncios" />
+    </>
   )
 }
 

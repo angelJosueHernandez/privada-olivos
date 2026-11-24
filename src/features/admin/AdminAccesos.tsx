@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import Encabezado from '../../shared/ui/Encabezado'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { Opciones } from '../../shared/ui/Opciones'
+import { Paginacion, usePaginacion } from '../../shared/ui/Paginacion'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import { filtrar, LARGO } from '../../shared/validacion'
 import { casetaService } from '../caseta/casetaService'
@@ -65,6 +66,7 @@ export default function AdminAccesos() {
       (estado === 'TODOS' || estadoDe(a) === estado) && (!tipo || a.tipo === tipo) &&
       (!q || normal([a.nombre, a.casa, a.placas, a.folio, a.registradoPor.nombre, a.paseCreadoPor?.nombre].filter(Boolean).join(' ')).includes(q)))
   }, [accesos, estado, tipo, busqueda])
+  const pag = usePaginacion(lista, 20, `${estado}|${tipo}|${busqueda}`)
   const cuenta = (e: Estado) => (accesos ?? []).filter((a) => e === 'TODOS' || estadoDe(a) === e).length
 
   return (
@@ -96,7 +98,7 @@ export default function AdminAccesos() {
       </div>
 
       <p className="mt-5 mb-2 px-1 text-[0.875rem] text-suave" aria-live="polite"><span className="cifras">{lista.length}</span> registro{lista.length === 1 ? '' : 's'}</p>
-      <div className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
+      <div ref={pag.ancla} className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
         {accesos === null ? <div className="h-48 animate-pulse" /> : lista.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <p className="text-[1.0625rem] font-semibold">Sin resultados</p>
@@ -104,7 +106,7 @@ export default function AdminAccesos() {
           </div>
         ) : (
           <ul className="divide-y divide-separador">
-            {lista.map((a) => {
+            {pag.visibles.map((a) => {
               const e = estadoDe(a)
               const largo = e === 'DENTRO' && ahora - a.entrada.getTime() > 2 * 3600_000
               return (
@@ -130,6 +132,7 @@ export default function AdminAccesos() {
           </ul>
         )}
       </div>
+      <Paginacion {...pag.props} nombre="accesos" />
 
       {abierto && <DetalleAcceso acceso={abierto} onCerrar={() => setAbierto(null)} />}
     </>

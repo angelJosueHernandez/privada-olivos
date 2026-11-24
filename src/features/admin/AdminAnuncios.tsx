@@ -90,7 +90,7 @@ export default function AdminAnuncios() {
 
       {anuncios === null ? <div className="h-40 rounded-[22px] bg-panel shadow-tarjeta animate-pulse" />
         : lista.length === 0 ? <Vacio icono="megafono" titulo="Sin anuncios" texto="Publica avisos de mantenimiento, eventos o pagos para todas las casas o para una calle." />
-        : <ListaAnuncios anuncios={lista} onBorrar={setBorrar} onEditar={setEditando} onVerRespuestas={(a) => setRespuestasDe(a.id)} />}
+        : <ListaAnuncios anuncios={lista} clave={filtro} onBorrar={setBorrar} onEditar={setEditando} onVerRespuestas={(a) => setRespuestasDe(a.id)} />}
 
       {viendo && (
         <Hoja titulo="Respuestas" onCerrar={() => setRespuestasDe(null)}>

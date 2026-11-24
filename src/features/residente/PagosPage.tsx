@@ -4,6 +4,7 @@ import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
 import Icon from '../../shared/ui/Icon'
 import { Opciones, OpcionesMultiples } from '../../shared/ui/Opciones'
+import { Paginacion, usePaginacion } from '../../shared/ui/Paginacion'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import { CAMPO_INVALIDO, ErrorFormulario, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
 import { filtrar, LARGO, validar } from '../../shared/validacion'
@@ -56,6 +57,8 @@ export default function PagosPage() {
   const atrasadas = cuotas.filter((c) => c.estado === 'ATRASADO')
   const enRevision = cuotas.filter((c) => c.estado === 'EN_REVISION')
   const adeudo = porPagar.reduce((s, c) => s + c.monto, 0)
+  const pagCuotas = usePaginacion(cuotas, 12)
+  const pagComp = usePaginacion(comprobantes, 10)
 
   const subir = async (datos: Parameters<typeof comunidadService.subirComprobante>[0], imagen: Blob) => {
     setEnviando(true)
@@ -105,9 +108,10 @@ export default function PagosPage() {
 
       {/* Estado de cuenta */}
       <section aria-labelledby="t-cuenta" className="mt-8">
+        <div ref={pagCuotas.ancla} />
         <h2 id="t-cuenta" className="mb-3 text-[1.375rem] font-semibold tracking-[-0.015em]">Estado de cuenta</h2>
         <ul className="rounded-[20px] bg-panel shadow-tarjeta divide-y divide-separador overflow-hidden">
-          {cuotas.map((c, i) => (
+          {pagCuotas.visibles.map((c, i) => (
             <li key={c.periodo} className="anim-entrar flex items-center gap-4 px-5 py-4" style={{ animationDelay: `${i * 35}ms` }}>
               <div className="min-w-0 flex-1">
                 <p className="text-[1rem] font-semibold">{nombrePeriodo(c.periodo)}</p>
@@ -118,16 +122,18 @@ export default function PagosPage() {
             </li>
           ))}
         </ul>
+        <Paginacion {...pagCuotas.props} nombre="meses" />
       </section>
 
       {/* Comprobantes enviados */}
       <section aria-labelledby="t-comp" className="mt-8">
+        <div ref={pagComp.ancla} />
         <h2 id="t-comp" className="mb-3 text-[1.375rem] font-semibold tracking-[-0.015em]">Mis comprobantes</h2>
         {comprobantes.length === 0 ? (
           <p className="rounded-[20px] bg-panel shadow-tarjeta px-5 py-8 text-center text-[0.9375rem] text-suave">Aún no has enviado comprobantes.</p>
         ) : (
           <ul className="rounded-[20px] bg-panel shadow-tarjeta divide-y divide-separador overflow-hidden">
-            {comprobantes.map((c) => (
+            {pagComp.visibles.map((c) => (
               <li key={c.id}>
                 <button type="button" onClick={() => setVista({ modo: 'ver', comprobante: c })}
                   className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-texto/[0.03] active:bg-texto/[0.05] transition-colors">
@@ -145,6 +151,7 @@ export default function PagosPage() {
             ))}
           </ul>
         )}
+        <Paginacion {...pagComp.props} nombre="comprobantes" />
       </section>
 
       {vista?.modo === 'subir' && (

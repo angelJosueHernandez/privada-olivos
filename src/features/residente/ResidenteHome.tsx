@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
 import Icon, { IconName } from '../../shared/ui/Icon'
+import { Paginacion, usePaginacion } from '../../shared/ui/Paginacion'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import TarjetaAvisos from '../../shared/avisos/TarjetaAvisos'
 import { casetaService } from '../caseta/casetaService'
@@ -105,6 +106,9 @@ export default function ResidenteHome() {
 
   const activos = pases.filter((p) => p.estado === 'VALIDO')
   const anteriores = pases.filter((p) => p.estado !== 'VALIDO')
+  const pagActivos = usePaginacion(activos, 10)
+  const pagAnteriores = usePaginacion(anteriores, 10)
+  const pagHoy = usePaginacion(accesos, 10)
   const enCaseta = accesos.filter((a) => a.paquete === 'CASETA' && !a.entregado)
   const eventos: Evento[] = avisos.map((v: Aviso) => ({ id: v.id, tipo: EVENTO_DE[v.tipo], titulo: v.titulo, detalle: `${v.cuerpo}`, hora: v.en, leido: sinLeer === 0 || avisos.indexOf(v) >= sinLeer }))
 
@@ -169,7 +173,7 @@ export default function ResidenteHome() {
       {/* Pases activos */}
       <section aria-labelledby="t-pases" className="mt-10">
         <Titulo extra={activos.length > 0 ? <span className="text-[0.9375rem] text-suave cifras">{activos.length} activo{activos.length > 1 ? 's' : ''}</span> : undefined}>Mis pases</Titulo>
-        <div className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
+        <div ref={pagActivos.ancla} className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
           {cargando ? <Esqueleto /> : activos.length === 0 ? (
             <div className="px-6 py-10 text-center">
               <p className="text-[1.0625rem] font-semibold">No tienes pases activos</p>
@@ -177,10 +181,11 @@ export default function ResidenteHome() {
             </div>
           ) : (
             <ul className="divide-y divide-separador">
-              {activos.map((p, i) => <FilaPase key={p.id} pase={p} i={i} onAbrir={() => setVista({ modo: 'pase', pase: p })} />)}
+              {pagActivos.visibles.map((p, i) => <FilaPase key={p.id} pase={p} i={i} onAbrir={() => setVista({ modo: 'pase', pase: p })} />)}
             </ul>
           )}
         </div>
+        <Paginacion {...pagActivos.props} nombre="pases activos" />
         {anteriores.length > 0 && (
           <>
             <button type="button" onClick={() => setVerAnteriores(!verAnteriores)} aria-expanded={verAnteriores}
@@ -188,11 +193,13 @@ export default function ResidenteHome() {
               <span className={`transition-transform duration-200 ${verAnteriores ? 'rotate-90' : '-rotate-90'}`}><Icon n="atras" size={16} /></span>
               {verAnteriores ? 'Ocultar pases anteriores' : `Ver pases anteriores (${anteriores.length})`}
             </button>
-            {verAnteriores && (
+            {verAnteriores && (<>
+              <div ref={pagAnteriores.ancla} />
               <ul className="anim-llenar mt-1 rounded-[20px] bg-panel shadow-tarjeta divide-y divide-separador overflow-hidden">
-                {anteriores.map((p, i) => <FilaPase key={p.id} pase={p} i={i} onAbrir={() => setVista({ modo: 'pase', pase: p })} />)}
+                {pagAnteriores.visibles.map((p, i) => <FilaPase key={p.id} pase={p} i={i} onAbrir={() => setVista({ modo: 'pase', pase: p })} />)}
               </ul>
-            )}
+              <Paginacion {...pagAnteriores.props} nombre="pases anteriores" />
+            </>)}
           </>
         )}
       </section>
@@ -200,7 +207,7 @@ export default function ResidenteHome() {
       {/* Lo que pasó hoy en la casa */}
       <section aria-labelledby="t-hoy" className="mt-10">
         <Titulo>Hoy en tu casa</Titulo>
-        <div className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
+        <div ref={pagHoy.ancla} className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
           {cargando ? <Esqueleto /> : accesos.length === 0 ? (
             <div className="px-6 py-10 text-center">
               <p className="text-[1.0625rem] font-semibold">Sin movimientos hoy</p>
@@ -208,7 +215,7 @@ export default function ResidenteHome() {
             </div>
           ) : (
             <ul className="divide-y divide-separador">
-              {accesos.map((a, i) => {
+              {pagHoy.visibles.map((a, i) => {
                 const e = estadoAcceso(a)
                 return (
                   <li key={a.id} className="anim-entrar" style={{ animationDelay: `${Math.min(i * 35, 210)}ms` }}>
@@ -229,6 +236,7 @@ export default function ResidenteHome() {
             </ul>
           )}
         </div>
+        <Paginacion {...pagHoy.props} nombre="movimientos" />
       </section>
 
       {/* Ventanas */}

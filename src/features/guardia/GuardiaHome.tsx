@@ -3,6 +3,7 @@ import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Icon, { IconName } from '../../shared/ui/Icon'
+import { Paginacion, usePaginacion } from '../../shared/ui/Paginacion'
 import { useAuth } from '../auth/AuthContext'
 import DetalleAcceso from '../caseta/DetalleAcceso'
 import Escaner from '../caseta/Escaner'
@@ -144,6 +145,8 @@ export default function GuardiaHome() {
   const dentro = accesos.filter(estaDentro)
   const caseta = accesos.filter(enCaseta)
   const lista = filtro === 'dentro' ? dentro : filtro === 'caseta' ? caseta : accesos
+  // Al registrar algo nuevo se vuelve a la página 1 para verlo resaltado
+  const pag = usePaginacion(lista, 20, `${filtro}|${nuevoId}`)
   const pestanas: [Filtro, string, number][] = [['dentro', 'Dentro', dentro.length], ['caseta', 'En caseta', caseta.length], ['todos', 'Todos', accesos.length]]
   const vacio = { dentro: ['No hay nadie dentro', 'Las entradas que registres aparecerán aquí.'], caseta: ['Sin paquetes en caseta', 'Los paquetes que se queden aquí aparecerán para entregarlos.'], todos: ['Sin registros hoy', 'Las entradas que registres aparecerán aquí.'] }[filtro]
 
@@ -198,7 +201,7 @@ export default function GuardiaHome() {
           </div>
         </div>
 
-        <div className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
+        <div ref={pag.ancla} className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
           {cargandoLista ? (
             <ul aria-hidden="true" className="divide-y divide-separador">
               {[0, 1, 2].map((i) => (
@@ -214,8 +217,8 @@ export default function GuardiaHome() {
               <p className="mt-1 text-[0.9375rem] text-suave">{vacio[1]}</p>
             </div>
           ) : (
-            <ul key={filtro} className="divide-y divide-separador">
-              {lista.map((a, i) => {
+            <ul key={`${filtro}-${pag.props.pagina}`} className="divide-y divide-separador">
+              {pag.visibles.map((a, i) => {
                 const largo = estaDentro(a) && tiempoDentro(a, ahora) > LIMITE_ESTANCIA_MS
                 return (
                   <li key={a.id} style={{ animationDelay: a.id === nuevoId ? undefined : `${Math.min(i * 35, 210)}ms` }}
@@ -253,6 +256,7 @@ export default function GuardiaHome() {
             </ul>
           )}
         </div>
+        <Paginacion {...pag.props} nombre="registros" />
       </section>
 
       {/* Hojas de cada tarea */}

@@ -4,6 +4,7 @@ import Encabezado from '../../shared/ui/Encabezado'
 import Hoja from '../../shared/ui/Hoja'
 import Icon, { IconName } from '../../shared/ui/Icon'
 import { Opciones } from '../../shared/ui/Opciones'
+import { Paginacion, usePaginacion } from '../../shared/ui/Paginacion'
 import { useAtrasCierra } from '../../shared/ui/useAtrasCierra'
 import Vacio from '../../shared/ui/Vacio'
 import { CAMPO_INVALIDO, ErrorFormulario, MensajeCampo, useValidacion } from '../../shared/ui/useValidacion'
@@ -157,6 +158,7 @@ function ListaCuentas({ cuentas, yo, onAbrir }: { cuentas: Cuenta[]; yo: string;
     return cuentas.filter((c) => cumple(c, filtro) && (!t || normal(`${c.nombre} ${c.email} ${c.casa ?? ''} ${c.telefono ?? ''}`).includes(t)))
   }, [cuentas, q, filtro])
   const n = (f: FiltroCuenta) => cuentas.filter((c) => cumple(c, f)).length
+  const pag = usePaginacion(lista, 20, `${filtro}|${q}`)
 
   return (
     <>
@@ -173,10 +175,10 @@ function ListaCuentas({ cuentas, yo, onAbrir }: { cuentas: Cuenta[]; yo: string;
             .map(([v, t]) => ({ valor: v, etiqueta: `${t} ${n(v)}` }))} />
       </div>
       <p className="mt-5 mb-2 px-1 text-[0.875rem] text-suave" aria-live="polite"><span className="cifras">{lista.length}</span> {lista.length === 1 ? 'usuario' : 'usuarios'}</p>
-      <div className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
+      <div ref={pag.ancla} className="rounded-[20px] bg-panel shadow-tarjeta overflow-hidden">
         {lista.length === 0 ? <p className="px-6 py-12 text-center text-[0.9375rem] text-suave">Nadie coincide con la búsqueda.</p> : (
           <ul className="divide-y divide-separador">
-            {lista.map((c) => {
+            {pag.visibles.map((c) => {
               const e = estadoAcceso(c)
               return (
                 <li key={c.id}>
@@ -198,6 +200,7 @@ function ListaCuentas({ cuentas, yo, onAbrir }: { cuentas: Cuenta[]; yo: string;
           </ul>
         )}
       </div>
+      <Paginacion {...pag.props} nombre="usuarios" />
     </>
   )
 }
@@ -207,7 +210,8 @@ function ListaCasas({ casas, cuentas, onAbrir }: { casas: Casa[]; cuentas: Cuent
   const [inactivas, setInactivas] = useState(false)
   const t = normal(q.trim())
   const visibles = casas.filter((c) => (inactivas || c.activa) && (!t || normal(`${c.calle} ${c.numero}`).includes(t)))
-  const calles = [...new Set(visibles.map((c) => c.calle))]
+  const pag = usePaginacion(visibles, 36, `${q}|${inactivas}`)
+  const calles = [...new Set(pag.visibles.map((c) => c.calle))]
   const residentes = (c: Casa) => cuentas.filter((u) => u.casa === nombreCasa(c) && u.estado === 'ACTIVA')
   const hayInactivas = casas.some((c) => !c.activa)
   return (
@@ -224,11 +228,12 @@ function ListaCasas({ casas, cuentas, onAbrir }: { casas: Casa[]; cuentas: Cuent
             className={`h-10 rounded-full px-4 text-[0.875rem] font-medium transition-colors ${inactivas ? 'bg-texto text-panel' : 'bg-texto/[0.06] text-texto/75'}`}>Incluir desactivadas</button>
         )}
       </div>
+      <div ref={pag.ancla} />
       {visibles.length === 0 ? <div className="mt-5"><Vacio icono="inicio" titulo="Sin casas" texto="Da de alta las casas de la privada para asignarles residentes." /></div> : calles.map((calle) => (
         <section key={calle} className="mt-6">
           <h2 className="mb-2 px-1 text-[0.8125rem] font-semibold uppercase tracking-[0.04em] text-suave">Calle {calle}</h2>
           <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {visibles.filter((c) => c.calle === calle).map((c) => {
+            {pag.visibles.filter((c) => c.calle === calle).map((c) => {
               const rs = residentes(c)
               return (
                 <li key={c.id}>
@@ -248,17 +253,20 @@ function ListaCasas({ casas, cuentas, onAbrir }: { casas: Casa[]; cuentas: Cuent
           </ul>
         </section>
       ))}
+      <div className="mt-2"><Paginacion {...pag.props} nombre="casas" /></div>
     </>
   )
 }
 
 function ListaCambios({ cambios }: { cambios: Cambio[] }) {
+  const pag = usePaginacion(cambios, 20)
   if (!cambios.length) return <Vacio icono="lista" titulo="Sin cambios" texto="Aquí quedará registro de altas, bajas y cambios de acceso." />
   return (
     <>
       <p className="mb-2 px-1 text-[0.875rem] text-suave">Registro de quién hizo cada cambio. No se puede editar.</p>
+      <div ref={pag.ancla} />
       <ul className="rounded-[20px] bg-panel shadow-tarjeta divide-y divide-separador overflow-hidden">
-        {cambios.map((k) => (
+        {pag.visibles.map((k) => (
           <li key={k.id} className="px-4 sm:px-5 py-3.5">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-[1rem] font-semibold">{k.accion}</span>
@@ -269,6 +277,7 @@ function ListaCambios({ cambios }: { cambios: Cambio[] }) {
           </li>
         ))}
       </ul>
+      <Paginacion {...pag.props} nombre="cambios" />
     </>
   )
 }
