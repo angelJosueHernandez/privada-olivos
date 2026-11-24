@@ -176,6 +176,17 @@ Revisado contra producción (`privada-olivos.vercel.app`) con las herramientas q
 - `GET /api/caseta/pases/vigentes`: solo GUARDIA, solo pases de hoy y mañana, mínimo de datos. Una entrada validada sin red se vuelve a validar en el servidor al llegar; si el pase ya no era válido, la entrada se registra marcada para revisión.
 - Sesión sin red: la pestaña conserva solo el usuario (sin tokens); al reconectar, el servidor revalida la cookie y un 401 saca a la persona. Los cambios de la cola se envían **solo con la sesión de quien los hizo**.
 
+### 7i. Paginación de listas (2026-11-24)
+Hoy la app pagina **en pantalla** (20 por página): con datos de demostración todo vive en el dispositivo. Con la API,
+paginar solo en el navegador significaría descargar la bitácora completa en cada consulta (lento, y expone de golpe
+más datos personales de los necesarios). La API debe:
+- Paginar en el servidor todo listado que crezca con el tiempo (accesos, comprobantes, cambios, anuncios, usuarios):
+  `?limite=&cursor=` con **límite máximo fijo en el servidor (≤ 100)**; ignorar o rechazar valores mayores, negativos o no numéricos.
+- Preferir **cursor opaco** (id/fecha firmados o codificados) sobre `offset` grande (consultas lentas que sirven para DoS).
+- Búsqueda y filtros en el servidor con parámetros (nunca concatenar en SQL); `ORDER BY` solo de una lista blanca.
+- Cada página filtrada por la privada y los permisos de la sesión (el cursor no debe permitir saltar a datos de otra privada).
+- Exportar CSV: endpoint aparte, solo ADMIN, con rango de fechas obligatorio y límite de filas, registrado en la bitácora de auditoría.
+
 ### 7c. Notificaciones push
 - Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
   push responde 404/410.

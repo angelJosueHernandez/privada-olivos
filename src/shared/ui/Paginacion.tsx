@@ -54,7 +54,7 @@ type Props = { pagina: number; paginas: number; desde: number; hasta: number; to
 
 export function Paginacion({ pagina, paginas, desde, hasta, total, onIr, nombre = 'resultados' }: Props) {
   if (paginas <= 1) return null
-  const flecha = 'grid h-10 w-10 shrink-0 place-items-center rounded-full text-texto/75 transition-[background-color,transform] duration-150 hover:bg-texto/[0.06] active:scale-[0.94] disabled:pointer-events-none disabled:opacity-30'
+  const flecha = 'grid h-11 w-11 shrink-0 place-items-center rounded-full text-texto/75 transition-[background-color,transform] duration-150 ease-[var(--ease-out)] [@media(hover:hover)]:hover:bg-texto/[0.06] active:scale-[0.96] disabled:pointer-events-none disabled:opacity-30'
   return (
     <nav aria-label={`Páginas de ${nombre}`} className="mt-3 flex items-center justify-between gap-3 px-1">
       <p className="text-[0.875rem] text-suave cifras" aria-live="polite">
@@ -65,14 +65,14 @@ export function Paginacion({ pagina, paginas, desde, hasta, total, onIr, nombre 
           <Icon n="atras" size={18} />
         </button>
         {/* En teléfono solo "2 / 5"; en pantallas amplias, los números para saltar */}
-        <span className="px-2 text-[0.9375rem] font-medium cifras sm:hidden">{pagina} / {paginas}</span>
+        <span className="px-2 text-[0.9375rem] font-medium cifras sm:hidden"><span aria-hidden="true">{pagina} / {paginas}</span><span className="sr-only">Página {pagina} de {paginas}</span></span>
         <span className="hidden items-center gap-0.5 sm:flex">
           {numeros(pagina, paginas).map((p, i) => p === '…'
             ? <span key={`e${i}`} aria-hidden="true" className="w-6 text-center text-suave">…</span>
             : (
               <button key={p} type="button" onClick={() => onIr(p)} aria-label={`Página ${p}`} aria-current={p === pagina ? 'page' : undefined}
-                className={`h-10 min-w-10 rounded-full px-2 text-[0.9375rem] font-medium cifras transition-colors duration-150
-                  ${p === pagina ? 'bg-texto text-panel' : 'text-texto/75 hover:bg-texto/[0.06]'}`}>
+                className={`h-11 min-w-11 rounded-full px-2 text-[0.9375rem] font-medium cifras transition-colors duration-150
+                  ${p === pagina ? 'bg-texto text-panel' : 'text-texto/75 [@media(hover:hover)]:hover:bg-texto/[0.06]'}`}>
                 {p}
               </button>
             ))}
