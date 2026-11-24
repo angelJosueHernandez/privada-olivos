@@ -22,11 +22,26 @@ export type Anuncio = {
   calle?: string
   /** Deja de mostrarse a los residentes después de esta fecha (sin valor: no vence) */
   vence?: Date
+  /** Pide a cada casa confirmar de enterado o su asistencia (sin valor: solo informativo) */
+  pideRespuesta?: TipoRespuesta
   publicadoPor: Actor
   publicadoEn: Date
   editadoEn?: Date
+  /** Residente: lo que respondió su casa */
+  miRespuesta?: Respuesta
+  /** Administración: respuestas de todas las casas */
+  respuestas?: Respuesta[]
+  /** Administración: cuántas casas reciben el anuncio */
+  casasDestino?: number
 }
-export type NuevoAnuncio = Pick<Anuncio, 'titulo' | 'cuerpo' | 'categoria' | 'importante' | 'calle' | 'vence'>
+export type NuevoAnuncio = Pick<Anuncio, 'titulo' | 'cuerpo' | 'categoria' | 'importante' | 'calle' | 'vence' | 'pideRespuesta'>
+
+// ---------- Confirmaciones de los residentes ----------
+export type TipoRespuesta = 'ENTERADO' | 'ASISTENCIA'
+export type ValorRespuesta = 'ENTERADO' | 'ASISTE' | 'NO_ASISTE'
+/** Una respuesta por casa; si la casa vuelve a responder se reemplaza */
+export type Respuesta = { casa: string; valor: ValorRespuesta; personas?: number; por: Actor; en: Date }
+export const MAX_PERSONAS = 10
 
 export const CALLES = ['Palma', 'Encino', 'Olmo'] as const
 export const calleDe = (casa: string) => casa.replace(/^Calle\s+/i, '').replace(/\s+\d+.*$/, '')

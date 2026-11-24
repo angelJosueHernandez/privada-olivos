@@ -128,18 +128,26 @@ export default function ResidenteHome() {
           <Icon n="mas" size={22} stroke={2.2} />
         </button>
 
-        {/* Anuncios importantes de la administración: siempre visibles arriba mientras estén vigentes */}
-        {anuncios.filter((a) => a.importante).slice(0, 2).map((a) => (
-          <Link key={a.id} to="/residente/anuncios"
-            className="anim-entrar flex items-start gap-4 rounded-[22px] bg-acento/[0.08] p-4 ring-1 ring-inset ring-acento/25 transition-transform duration-150 active:scale-[0.98]">
-            <span className="grid place-items-center h-10 w-10 shrink-0 rounded-[12px] bg-acento text-acento-texto"><Icon n="megafono" size={20} /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[0.75rem] font-semibold uppercase tracking-[0.04em] text-acento">Aviso importante</span>
-              <span className="block text-[1.0625rem] font-semibold leading-snug">{a.titulo}</span>
-              <span className="mt-0.5 block text-[0.9375rem] text-texto/75 line-clamp-2">{a.cuerpo}</span>
-            </span>
-          </Link>
-        ))}
+        {/* Anuncios importantes o que esperan respuesta de la casa: arriba mientras estén vigentes */}
+        {anuncios.filter((a) => a.importante || (a.pideRespuesta && !a.miRespuesta)).slice(0, 2).map((a) => {
+          const pendiente = a.pideRespuesta && !a.miRespuesta
+          return (
+            <Link key={a.id} to="/residente/anuncios"
+              className="anim-entrar flex items-start gap-4 rounded-[22px] bg-acento/[0.08] p-4 ring-1 ring-inset ring-acento/25 transition-transform duration-150 active:scale-[0.98]">
+              <span className="grid place-items-center h-10 w-10 shrink-0 rounded-[12px] bg-acento text-acento-texto"><Icon n="megafono" size={20} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.75rem] font-semibold uppercase tracking-[0.04em] text-acento">{pendiente ? 'Espera tu respuesta' : 'Aviso importante'}</span>
+                <span className="block text-[1.0625rem] font-semibold leading-snug">{a.titulo}</span>
+                <span className="mt-0.5 block text-[0.9375rem] text-texto/75 line-clamp-2">{a.cuerpo}</span>
+                {pendiente && (
+                  <span className="mt-2 inline-flex items-center gap-1 text-[0.9375rem] font-semibold text-acento">
+                    {a.pideRespuesta === 'ASISTENCIA' ? 'Confirmar asistencia' : 'Marcar como enterado'}<span className="rotate-180"><Icon n="atras" size={15} stroke={2.2} /></span>
+                  </span>
+                )}
+              </span>
+            </Link>
+          )
+        })}
 
         {/* Resumen: pagos y anuncios */}
         <ResumenComunidad cuotas={cuotas} anuncios={anuncios} />

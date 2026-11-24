@@ -5,10 +5,12 @@ import Vacio from '../../shared/ui/Vacio'
 import { useAuth } from '../auth/AuthContext'
 import { comunidadService } from '../comunidad/comunidadService'
 import ListaAnuncios, { leerVisto, marcarVisto } from '../comunidad/ListaAnuncios'
-import { Anuncio } from '../comunidad/tipos'
+import type { Actor } from '../caseta/tipos'
+import { Anuncio, ValorRespuesta } from '../comunidad/tipos'
 
 export default function AnunciosPage() {
-  const casa = useAuth().user?.casa ?? ''
+  const { user } = useAuth()
+  const casa = user?.casa ?? ''
   const [anuncios, setAnuncios] = useState<Anuncio[] | null>(null)
   // Se guarda la marca anterior para resaltar lo nuevo en esta visita, y se actualiza al entrar
   const [vistoHasta] = useState(leerVisto)
@@ -19,6 +21,20 @@ export default function AnunciosPage() {
   }, [casa])
   useEffect(() => { void cargar(); return comunidadService.suscribir(() => void cargar()) }, [cargar])
 
+  const responder = async (a: Anuncio, valor: ValorRespuesta, personas?: number) => {
+    const actor: Actor = { id: user?.id ?? '', nombre: user?.nombre ?? '', rol: 'RESIDENTE', casa }
+    try {
+      await comunidadService.responderAnuncio(a.id, valor, personas, actor)
+      if (valor !== a.miRespuesta?.valor) {
+        toast.success(valor === 'ENTERADO' ? 'Gracias, quedó registrado' : valor === 'ASISTE' ? '¡Te esperamos!' : 'Gracias por avisar',
+          { description: valor === 'ENTERADO' ? 'La administración ya sabe que lo leíste.' : 'La administración ya tiene tu respuesta.' })
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar tu respuesta')
+      throw e
+    }
+  }
+
   return (
     <>
       <Encabezado titulo="Anuncios" detalle="Avisos de la administración de tu privada" />
@@ -27,7 +43,7 @@ export default function AnunciosPage() {
       ) : anuncios.length === 0 ? (
         <Vacio icono="megafono" titulo="Sin anuncios" texto="Cuando la administración publique algo, lo verás aquí y te llegará una notificación." />
       ) : (
-        <ListaAnuncios anuncios={anuncios} vistoHasta={vistoHasta} />
+        <ListaAnuncios anuncios={anuncios} vistoHasta={vistoHasta} onResponder={responder} />
       )}
     </>
   )

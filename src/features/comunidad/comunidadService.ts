@@ -3,7 +3,8 @@ import { CASAS, casetaService } from '../caseta/casetaService'
 import type { Actor } from '../caseta/tipos'
 import { COBRO } from './config'
 import {
-  anuncioPara, anuncioVigente, nombrePeriodo, pesos, type Anuncio, type CobranzaCasa, type Comprobante, type Cuota, type NuevoAnuncio, type NuevoComprobante,
+  anuncioPara, anuncioVigente, MAX_PERSONAS, nombrePeriodo, pesos, type Anuncio, type CobranzaCasa, type Comprobante, type Cuota, type NuevoAnuncio, type NuevoComprobante,
+  type Respuesta, type ValorRespuesta,
 } from './tipos'
 
 /*
@@ -13,8 +14,10 @@ import {
   Sin API: modo demostración guardado en este navegador y compartido entre pestañas.
 */
 
-type EstadoDemo = { anuncios: Anuncio[]; comprobantes: Comprobante[]; pagados: Record<string, string[]> }
-const CLAVE = 'olv-comunidad-v3'
+/** respuestas[idAnuncio][casa] */
+type Respuestas = Record<string, Record<string, Respuesta>>
+type EstadoDemo = { anuncios: Anuncio[]; comprobantes: Comprobante[]; pagados: Record<string, string[]>; respuestas: Respuestas }
+const CLAVE = 'olv-comunidad-v4'
 const admin: Actor = { id: '1', nombre: 'Alejandro Garza', rol: 'ADMIN' }
 const jorge: Actor = { id: 'u-res-7', nombre: 'Jorge Salinas', rol: 'RESIDENTE', casa: 'Calle Encino 212' }
 const rocha: Actor = { id: 'u-res-9', nombre: 'Familia Rocha', rol: 'RESIDENTE', casa: 'Calle Olmo 303' }
@@ -43,8 +46,8 @@ function comprobanteEjemplo(monto: number, ref: string, fecha: Date): string {
 function semilla(): EstadoDemo {
   const actual = periodoDe(new Date())
   const anuncios: Anuncio[] = [
-    { id: 'n1', titulo: 'Junta de vecinos este sábado', cuerpo: 'Te esperamos el sábado a las 10:00 en la palapa. Revisaremos el presupuesto del próximo año y la propuesta de cámaras nuevas en la entrada. Tu asistencia es importante.', categoria: 'EVENTO', importante: true, publicadoPor: admin, publicadoEn: haceDias(1, 18) },
-    { id: 'n2', titulo: 'Mantenimiento de la alberca', cuerpo: 'El martes y miércoles la alberca permanecerá cerrada por limpieza profunda y cambio de filtros. Gracias por tu comprensión.', categoria: 'MANTENIMIENTO', importante: false, publicadoPor: admin, publicadoEn: haceDias(3, 9) },
+    { id: 'n1', titulo: 'Junta de vecinos este sábado', cuerpo: 'Te esperamos el sábado a las 10:00 en la palapa. Revisaremos el presupuesto del próximo año y la propuesta de cámaras nuevas en la entrada. Confirma si vas a asistir para preparar sillas y café.', categoria: 'EVENTO', importante: true, pideRespuesta: 'ASISTENCIA', publicadoPor: admin, publicadoEn: haceDias(1, 18) },
+    { id: 'n2', titulo: 'Mantenimiento de la alberca', cuerpo: 'El martes y miércoles la alberca permanecerá cerrada por limpieza profunda y cambio de filtros. Gracias por tu comprensión.', categoria: 'MANTENIMIENTO', importante: false, pideRespuesta: 'ENTERADO', publicadoPor: admin, publicadoEn: haceDias(3, 9) },
     { id: 'n3', titulo: `La cuota vence el día ${COBRO.diaVencimiento}`, cuerpo: `Recuerda subir tu comprobante en la sección Pagos. Usa como referencia tu calle y número (por ejemplo PALMA104) para identificar tu depósito más rápido.`, categoria: 'PAGOS', importante: false, publicadoPor: admin, publicadoEn: haceDias(12, 8) },
     { id: 'n4', titulo: 'Nuevo horario de recolección de basura', cuerpo: 'A partir de este mes, el camión pasa lunes, miércoles y viernes a las 7:30. Saca tus bolsas después de las 6:00.', categoria: 'GENERAL', importante: false, publicadoPor: admin, publicadoEn: haceDias(16, 12) },
   ]
@@ -62,7 +65,15 @@ function semilla(): EstadoDemo {
     pagados[casa] = [3, 2, 1].filter((n) => n > debe).map((n) => periodoDe(mesesAtras(n)))
     if (pagoActual && debe === 0) pagados[casa].push(actual)
   })
-  return { anuncios, comprobantes, pagados }
+  // Algunas casas ya respondieron (María, de Palma 104, todavía no: así se puede probar)
+  const respuestas: Respuestas = { n1: {}, n2: {} }
+  CASAS.forEach((casa, i) => {
+    if (casa === 'Calle Palma 104') return
+    const por: Actor = { id: `u-casa-${i}`, nombre: 'Residente', rol: 'RESIDENTE', casa }
+    if (i % 3 !== 0) respuestas.n1[casa] = { casa, valor: i % 5 === 1 ? 'NO_ASISTE' : 'ASISTE', personas: i % 5 === 1 ? undefined : 1 + (i % 3), por, en: haceDias(i % 2, 9 + (i % 10)) }
+    if (i % 4 !== 3) respuestas.n2[casa] = { casa, valor: 'ENTERADO', por, en: haceDias(2 - (i % 3), 8 + (i % 12)) }
+  })
+  return { anuncios, comprobantes, pagados, respuestas }
 }
 
 const fechas = <T extends object>(o: T, campos: string[]): T => {
@@ -72,17 +83,23 @@ const fechas = <T extends object>(o: T, campos: string[]): T => {
 }
 const revivirAnuncio = (a: Anuncio) => fechas(a, ['publicadoEn', 'vence', 'editadoEn'])
 const revivirComprobante = (c: Comprobante) => fechas(c, ['fechaPago', 'subidoEn', 'revisadoEn'])
+const revivirRespuesta = (r: Respuesta) => fechas(r, ['en'])
+const revivirRespuestas = (rs: Respuestas): Respuestas =>
+  Object.fromEntries(Object.entries(rs).map(([id, porCasa]) => [id, Object.fromEntries(Object.entries(porCasa).map(([c, r]) => [c, revivirRespuesta(r)]))]))
+const conRespuestas = (a: Anuncio): Anuncio => ({ ...revivirAnuncio(a), miRespuesta: a.miRespuesta && revivirRespuesta(a.miRespuesta), respuestas: a.respuestas?.map(revivirRespuesta) })
+/** Casas que reciben un anuncio (todas o las de su calle) */
+const casasDe = (a: Anuncio) => CASAS.filter((c) => anuncioPara(a, c))
 
 function leer(): EstadoDemo {
   try {
     const s = JSON.parse(localStorage.getItem(CLAVE) ?? 'null') as EstadoDemo | null
     if (s && Array.isArray(s.anuncios) && Array.isArray(s.comprobantes) && s.pagados) {
-      return { anuncios: s.anuncios.map(revivirAnuncio), comprobantes: s.comprobantes.map(revivirComprobante), pagados: s.pagados }
+      return { anuncios: s.anuncios.map(revivirAnuncio), comprobantes: s.comprobantes.map(revivirComprobante), pagados: s.pagados, respuestas: revivirRespuestas(s.respuestas ?? {}) }
     }
   } catch { /* se reinicia */ }
   return semilla()
 }
-let demo: EstadoDemo = hayApi ? { anuncios: [], comprobantes: [], pagados: {} } : leer()
+let demo: EstadoDemo = hayApi ? { anuncios: [], comprobantes: [], pagados: {}, respuestas: {} } : leer()
 const oyentes = new Set<() => void>()
 function guardar() {
   try { localStorage.setItem(CLAVE, JSON.stringify(demo)) }
@@ -124,15 +141,21 @@ export const comunidadService = {
    * Sin `casa`: todos, para la administración. Con API el servidor filtra según la sesión.
    */
   async anuncios(casa?: string): Promise<Anuncio[]> {
-    if (hayApi) return (await api<Anuncio[]>(casa ? '/api/anuncios' : '/api/admin/anuncios')).map(revivirAnuncio)
+    if (hayApi) return (await api<Anuncio[]>(casa ? '/api/anuncios' : '/api/admin/anuncios')).map(conRespuestas)
     await espera(150)
-    const lista = casa ? demo.anuncios.filter((a) => anuncioVigente(a) && anuncioPara(a, casa)) : demo.anuncios
+    const lista: Anuncio[] = casa
+      ? demo.anuncios.filter((a) => anuncioVigente(a) && anuncioPara(a, casa)).map((a) => ({ ...a, miRespuesta: demo.respuestas[a.id]?.[casa] }))
+      // La administración solo ve respuestas de casas que todavía reciben el anuncio (si cambió la calle)
+      : demo.anuncios.map((a) => { const destino = new Set(casasDe(a)); return { ...a, casasDestino: destino.size, respuestas: Object.values(demo.respuestas[a.id] ?? {}).filter((r) => destino.has(r.casa)) } })
     return [...lista].sort((a, b) => Number(b.importante) - Number(a.importante) || b.publicadoEn.getTime() - a.publicadoEn.getTime())
   },
   async editarAnuncio(id: string, datos: NuevoAnuncio): Promise<void> {
     if (hayApi) return api<void>(`/api/anuncios/${encodeURIComponent(id)}`, { metodo: 'PUT', cuerpo: datos })
     await espera()
+    const antes = demo.anuncios.find((a) => a.id === id)
     demo.anuncios = demo.anuncios.map((a) => (a.id === id ? { ...a, ...datos, editadoEn: new Date() } : a))
+    // Si cambia la pregunta, las respuestas anteriores ya no aplican
+    if (antes && antes.pideRespuesta !== datos.pideRespuesta) { const { [id]: _viejas, ...resto } = demo.respuestas; demo.respuestas = resto }
     guardar()
   },
   async publicarAnuncio(datos: NuevoAnuncio, actor: Actor): Promise<Anuncio> {
@@ -148,7 +171,38 @@ export const comunidadService = {
     if (hayApi) return api<void>(`/api/anuncios/${encodeURIComponent(id)}`, { metodo: 'DELETE' })
     await espera(200)
     demo.anuncios = demo.anuncios.filter((a) => a.id !== id)
+    const { [id]: _borradas, ...resto } = demo.respuestas
+    demo.respuestas = resto
     guardar()
+  },
+  /**
+   * El residente confirma de enterado o su asistencia. Una respuesta por casa (se puede cambiar).
+   * Con API el servidor toma la casa de la sesión, verifica que el anuncio sea para ella, siga vigente
+   * y pida ese tipo de respuesta.
+   */
+  async responderAnuncio(id: string, valor: ValorRespuesta, personas: number | undefined, actor: Actor): Promise<Respuesta> {
+    const n = valor === 'ASISTE' ? Math.min(MAX_PERSONAS, Math.max(1, Math.round(personas ?? 1))) : undefined
+    if (hayApi) return revivirRespuesta(await api<Respuesta>(`/api/anuncios/${encodeURIComponent(id)}/respuesta`, { metodo: 'PUT', cuerpo: { valor, personas: n } }))
+    await espera(200)
+    const casa = actor.casa ?? ''
+    const a = demo.anuncios.find((x) => x.id === id)
+    if (!a || !anuncioVigente(a) || !anuncioPara(a, casa) || !a.pideRespuesta) throw new Error('Este anuncio ya no acepta respuestas.')
+    if ((a.pideRespuesta === 'ENTERADO') !== (valor === 'ENTERADO')) throw new Error('Respuesta no válida.')
+    const r: Respuesta = { casa, valor, personas: n, por: actor, en: new Date() }
+    demo.respuestas = { ...demo.respuestas, [id]: { ...(demo.respuestas[id] ?? {}), [casa]: r } }
+    guardar()
+    return r
+  },
+  /** Administración: manda un recordatorio solo a las casas que no han respondido. Devuelve cuántas. */
+  async recordarPendientes(id: string): Promise<number> {
+    if (hayApi) return (await api<{ enviados: number }>(`/api/admin/anuncios/${encodeURIComponent(id)}/recordatorio`, { metodo: 'POST' })).enviados
+    await espera(300)
+    const a = demo.anuncios.find((x) => x.id === id)
+    if (!a || !a.pideRespuesta || !anuncioVigente(a)) throw new Error('Este anuncio ya no acepta respuestas.')
+    const faltan = casasDe(a).filter((c) => !demo.respuestas[id]?.[c])
+    const titulo = a.pideRespuesta === 'ASISTENCIA' ? 'Confirma tu asistencia' : 'Confirma que leíste el anuncio'
+    faltan.forEach((casa) => casetaService.avisar({ para: casa, tipo: 'anuncio', titulo, cuerpo: a.titulo }))
+    return faltan.length
   },
 
   // ---------- Pagos (residente) ----------

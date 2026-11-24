@@ -89,6 +89,8 @@ esta página. La seguridad real vive en el servidor.
 - La bitácora se exporta en CSV desde el navegador con protección contra **inyección de fórmulas** (las celdas que
   empiezan con `= + - @` se escapan). Si la API ofrece su propia exportación, debe hacer lo mismo.
 
+- **Confirmaciones de anuncios** (`PUT /api/anuncios/{id}/respuesta`): la casa sale de la sesión, nunca del cuerpo. El servidor valida que el anuncio sea para esa casa, siga vigente y pida ese tipo de respuesta; `valor` contra lista cerrada y `personas` entero entre 1 y 10. Una respuesta por casa (upsert). El recordatorio (`POST /api/admin/anuncios/{id}/recordatorio`) es solo ADMIN y con límite (p. ej. 1 por anuncio cada 12 h) para no usarlo como spam.
+
 ### 7c. Notificaciones push
 - Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
   push responde 404/410.
