@@ -35,6 +35,7 @@ export type Pendiente = {
 }
 
 let usuarioActual = ''
+let rolActual = ''
 let cuantos = 0
 const oyentes = new Set<() => void>()
 const avisar = () => oyentes.forEach((f) => f())
@@ -48,6 +49,9 @@ export const cola = {
   /** La sesión activa: solo se envían y se muestran sus cambios */
   set usuario(id: string) { usuarioActual = id; void recontar() },
   get usuario() { return usuarioActual },
+  /** Rol de la sesión (la copia de datos de caseta se comparte entre guardias) */
+  set rol(r: string) { rolActual = r },
+  get rol() { return rolActual },
   get pendientes() { return cuantos },
   suscribir(f: () => void) { oyentes.add(f); return () => { oyentes.delete(f) } },
 

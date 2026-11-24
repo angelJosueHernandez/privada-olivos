@@ -14,6 +14,8 @@ import { authService } from '../auth/authService'
 import { PASSWORD_MIN, revisarPassword } from '../directorio/tipos'
 import { ErrorFormulario } from '../../shared/ui/useValidacion'
 import ConfigurarAutenticador from '../auth/ConfigurarAutenticador'
+import { accesoSinConexion } from '../auth/accesoSinConexion'
+import { MODO_DEMO } from '../auth/authService'
 
 const iniciales = (n: string) => n.split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase()
 
@@ -62,6 +64,31 @@ function DosPasos() {
         </Hoja>
       )}
     </>
+  )
+}
+
+/* Si este dispositivo permite entrar sin internet, hasta cuándo, y la opción de quitarlo */
+function EntrarSinInternet() {
+  const { user } = useAuth()
+  const [vence, setVence] = useState(() => accesoSinConexion.vigencia(user?.email))
+  if (!user) return null
+  const permitido = accesoSinConexion.permitidoPara(user.rol)
+  const texto = MODO_DEMO ? 'Disponible: en la versión de prueba todo vive en este dispositivo'
+    : !permitido ? 'No disponible para Administración'
+    : vence ? `Disponible hasta el ${vence.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`
+    : 'Entra una vez con internet para activarlo'
+  return (
+    <div className="flex items-center gap-3.5 px-4 min-h-[56px] py-2.5">
+      <span className="grid place-items-center h-9 w-9 shrink-0 rounded-[10px] bg-fondo text-texto/70"><Icon n="sinRed" size={18} /></span>
+      <dt className="min-w-0 flex-1 text-[0.9375rem]">
+        Entrar sin internet en este dispositivo
+        <span className="block text-[0.8125rem] text-suave">{texto}</span>
+      </dt>
+      {!MODO_DEMO && vence && (
+        <dd><button type="button" onClick={() => { accesoSinConexion.quitar(user.email); setVence(null); toast.success('Listo', { description: 'Este dispositivo ya no permite entrar sin internet.' }) }}
+          className="min-h-11 px-1 text-[0.9375rem] font-medium text-peligro">Quitar</button></dd>
+      )}
+    </div>
   )
 }
 
@@ -191,6 +218,7 @@ export default function PerfilPage() {
           </Fila>
           <Fila icono="salir" etiqueta="Cierre por inactividad">{INACTIVIDAD_MIN[user.rol]} min</Fila>
           <CambiarPassword />
+          <EntrarSinInternet />
         </Grupo>
 
         <Dispositivo />

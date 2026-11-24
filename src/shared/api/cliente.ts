@@ -69,15 +69,19 @@ type Copia = { clave: string; usuario: string; datos: unknown; guardado: number 
 export async function api<T>(ruta: string, opciones: Opciones = {}): Promise<T> {
   const metodo = opciones.metodo ?? 'GET'
   const copiable = metodo === 'GET' && !ruta.startsWith('/api/auth/')
+  // Los datos de caseta (pases vigentes, accesos de hoy) son de la caseta, no de un guardia:
+  // así el guardia del siguiente turno puede seguir validando aunque no haya internet
+  const dueno = ruta.startsWith('/api/caseta/') ? 'CASETA' : cola.usuario
   try {
     const datos = await peticion<T>(ruta, opciones)
-    if (copiable) void almacen.poner<Copia>('copia', { clave: ruta, usuario: cola.usuario, datos, guardado: Date.now() }).catch(() => {})
+    if (copiable) void almacen.poner<Copia>('copia', { clave: ruta, usuario: dueno, datos, guardado: Date.now() }).catch(() => {})
     return datos
   } catch (e) {
     // Sin red: se responde con la última copia (solo de la misma persona y no muy vieja)
     if (e instanceof ErrorRed && copiable) {
       const c = await almacen.leer<Copia>('copia', ruta).catch(() => undefined)
-      if (c && c.usuario === cola.usuario && Date.now() - c.guardado < VIGENCIA_COPIA_MS) return c.datos as T
+      const puede = c && (c.usuario === 'CASETA' ? cola.rol === 'GUARDIA' : c.usuario === cola.usuario)
+      if (c && puede && Date.now() - c.guardado < VIGENCIA_COPIA_MS) return c.datos as T
     }
     throw e
   }
@@ -192,8 +196,15 @@ export async function sincronizar(): Promise<void> {
   }
 }
 
-/** Al cerrar sesión: se borra la copia de datos (los cambios pendientes se quedan, son de esa persona) */
-export const borrarCopiaLocal = () => almacen.vaciar('copia').catch(() => {})
+/**
+ * Al cerrar sesión: se borra la copia de datos personales (los cambios pendientes se quedan, son de
+ * esa persona). La copia de caseta se conserva para el siguiente turno y solo la lee un guardia.
+ */
+export async function borrarCopiaLocal() {
+  try {
+    for (const c of await almacen.todos<Copia>('copia')) if (c.usuario !== 'CASETA') await almacen.quitar('copia', c.clave)
+  } catch { /* nada */ }
+}
 
 if (hayApi && typeof window !== 'undefined') {
   // Al volver la conexión, al volver a la app y cada 30 s mientras haya pendientes

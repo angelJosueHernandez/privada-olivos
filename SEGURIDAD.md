@@ -160,6 +160,15 @@ Revisado contra producción (`privada-olivos.vercel.app`) con las herramientas q
 - La caseta descarga los **pases vigentes** y valida QR sin red; un pase de un solo uso registrado sin red ya no se acepta otra vez en ese dispositivo.
 - Sin red **no** se puede: crear pases (la caseta debe recibirlo), leer placas con IA (pasa a captura manual), ni acciones del Directorio (contraseñas, suspensiones).
 
+**Entrar sin internet** (`src/features/auth/accesoSinConexion.ts`):
+- Solo en un **dispositivo de confianza**: uno donde la persona ya entró con internet pasando contraseña **y** código 2FA. Ahí se guarda una huella PBKDF2-SHA256 (310 000 iteraciones, sal aleatoria de 16 bytes) de la contraseña; **nunca la contraseña ni el secreto TOTP**.
+- Sin internet se entra con la contraseña; el segundo factor es el dispositivo (posesión). El código de la app autenticadora no se puede revisar sin servidor y su secreto no se copia al dispositivo.
+- Vence a los **7 días** de la última entrada con internet; **5 intentos fallidos lo borran** (además del bloqueo de 30 s de la pantalla de login); se actualiza al cambiar la contraseña; se puede quitar desde *Mi perfil*.
+- **No aplica a Administración.**
+- La sesión iniciada sin internet no existe en el servidor: al reconectar se pide entrar de nuevo (contraseña + código) y entonces se envía lo pendiente; si la cuenta fue suspendida mientras tanto, el servidor rechaza esos cambios.
+- Riesgo aceptado: alguien con el dispositivo desbloqueado y la contraseña puede entrar sin internet hasta 7 días después de una suspensión; no puede enviar nada al servidor sin pasar de nuevo por contraseña + código.
+- La copia de datos de caseta (pases vigentes, accesos del día) se conserva entre turnos para que el siguiente guardia pueda validar sin red; solo la lee una sesión de GUARDIA.
+
 **Lo que la API debe cumplir para que sea seguro:**
 - **`Idempotency-Key`** en todo POST/PUT/PATCH/DELETE: guardar la clave con su respuesta ≥ 48 h y, si llega repetida, devolver la misma respuesta sin repetir el cambio (si la conexión se corta a mitad del envío, la app reintenta con la misma clave).
 - Aceptar el **`id` UUID generado por el cliente** en altas de accesos (para que la salida hecha sin red apunte al registro correcto); rechazar si ya existe con otro dueño.

@@ -2,6 +2,7 @@ import { api, borrarCopiaLocal, ErrorApi, ErrorRed, hayApi, sincronizar } from '
 import { cola } from '../../shared/red/cola'
 import { directorioService } from '../directorio/directorioService'
 import type { Cuenta } from '../directorio/tipos'
+import { accesoSinConexion, type Preparado } from './accesoSinConexion'
 import { INACTIVIDAD_MIN } from './permisos'
 
 export type Rol = 'ADMIN' | 'RESIDENTE' | 'GUARDIA'
@@ -42,6 +43,13 @@ function validarUsuario(u: unknown): Usuario {
 const deCuenta = (c: Cuenta): Usuario => ({ id: c.id, nombre: c.nombre, rol: c.rol, casa: c.casa, email: c.email, debeCambiar: c.debeCambiar, dosPasos: c.dosPasos })
 
 const CLAVE_SESION = 'olv-sesion'
+/** Huella de la contraseña recién escrita: se guarda para entrar sin internet solo si el código 2FA es correcto */
+let preparado: Promise<Preparado> | null = null
+const confiarEnDispositivo = async (usuario: Usuario) => {
+  if (MODO_DEMO || !preparado) return
+  try { accesoSinConexion.guardar(await preparado, usuario) } catch { /* sin acceso sin conexión */ }
+  preparado = null
+}
 function borrarSesionDemo() { try { sessionStorage.removeItem(CLAVE_SESION) } catch { /* nada */ } }
 
 export const LIMITES = { email: 254, password: 128 } as const
@@ -52,7 +60,7 @@ export const authService = {
    * Primer paso. `configurar2fa`: la cuenta aún no tiene app autenticadora y debe configurarla
    * (escanear el QR) antes de entrar.
    */
-  async login(emailCrudo: string, password: string): Promise<{ usuario: Usuario; requiere2fa: boolean; configurar2fa: boolean }> {
+  async login(emailCrudo: string, password: string): Promise<{ usuario: Usuario; requiere2fa: boolean; configurar2fa: boolean; sinConexion?: boolean }> {
     const email = emailCrudo.trim().toLowerCase()
     if (!CORREO.test(email) || email.length > LIMITES.email || password.length > LIMITES.password) {
       throw new Error('Correo o contraseña incorrectos.')
@@ -62,10 +70,18 @@ export const authService = {
       const cuenta = await directorioService.verificar(email, password)
       return { usuario: deCuenta(cuenta), requiere2fa: true, configurar2fa: directorioService.necesitaConfigurar2fa(cuenta.id) }
     }
+    // Sin internet: solo en un dispositivo de confianza (ver accesoSinConexion.ts)
+    const entrarSinConexion = async () => ({ usuario: await accesoSinConexion.verificar(email, password), requiere2fa: false, configurar2fa: false, sinConexion: true })
+    if (!navigator.onLine) return entrarSinConexion()
+    preparado = accesoSinConexion.preparar(email, password)
     try {
       const r = await api<{ usuario: unknown; requiere2fa: boolean; configurar2fa?: boolean }>('/api/auth/login', { metodo: 'POST', cuerpo: { email, password } })
-      return { usuario: validarUsuario(r.usuario), requiere2fa: r.requiere2fa === true, configurar2fa: r.configurar2fa === true }
+      const usuario = validarUsuario(r.usuario)
+      if (r.requiere2fa !== true) await confiarEnDispositivo(usuario)
+      return { usuario, requiere2fa: r.requiere2fa === true, configurar2fa: r.configurar2fa === true }
     } catch (e) {
+      if (e instanceof ErrorRed) { preparado = null; return entrarSinConexion() }
+      preparado = null
       // Mismo mensaje si el correo no existe o la contraseña falla: no revela qué cuentas existen.
       if (e instanceof ErrorApi && (e.estado === 400 || e.estado === 401)) throw new Error('Correo o contraseña incorrectos.')
       throw e
@@ -80,6 +96,7 @@ export const authService = {
     }
     try {
       await api('/api/auth/2fa', { metodo: 'POST', cuerpo: { codigo } })
+      await confiarEnDispositivo(usuario)
     } catch (e) {
       if (e instanceof ErrorApi && (e.estado === 400 || e.estado === 401)) throw new Error('El código no es correcto. Revisa tu app de autenticación.')
       throw e
@@ -127,6 +144,7 @@ export const authService = {
   recordar(usuario: Usuario, inicio: Date) {
     // La cola de cambios sin conexión es de esta persona; al entrar se envía lo que tenga pendiente
     cola.usuario = usuario.id
+    cola.rol = usuario.rol
     void sincronizar()
     if (!MODO_DEMO) {
       // Con API: solo para poder seguir sin internet en esta pestaña (nunca tokens; la cookie es HttpOnly)
@@ -151,6 +169,10 @@ export const authService = {
   async crearPassword(usuario: Usuario, nueva: string, actual?: string): Promise<void> {
     if (nueva.length > LIMITES.password || (actual?.length ?? 0) > LIMITES.password) throw new Error('Es demasiado larga (máximo 128).')
     await directorioService.cambiarPassword(usuario.id, nueva, actual)
+    // La huella para entrar sin internet se actualiza a la contraseña nueva
+    if (!MODO_DEMO && usuario.email && accesoSinConexion.vigencia(usuario.email)) {
+      accesoSinConexion.guardar(await accesoSinConexion.preparar(usuario.email, nueva), usuario)
+    }
   },
   /** Demo: anota la última actividad para que la sesión recuperada respete la inactividad */
   marcarActividad() {
@@ -176,7 +198,7 @@ export const authService = {
   async activar2fa(usuario: Usuario, codigo: string): Promise<void> {
     if (!/^\d{6}$/.test(codigo)) throw new Error('El código debe tener 6 dígitos.')
     if (!MODO_DEMO) {
-      try { await api('/api/auth/2fa/activar', { metodo: 'POST', cuerpo: { codigo } }); return }
+      try { await api('/api/auth/2fa/activar', { metodo: 'POST', cuerpo: { codigo } }); await confiarEnDispositivo(usuario); return }
       catch (e) {
         if (e instanceof ErrorApi && (e.estado === 400 || e.estado === 401)) throw new Error('El código no coincide. Escribe el código actual de tu app.')
         throw e
@@ -191,6 +213,7 @@ export const authService = {
     // La copia de datos se borra (no deja datos de esta persona en el dispositivo); los cambios
     // pendientes se quedan y se envían cuando ella vuelva a entrar con conexión
     cola.usuario = ''
+    cola.rol = ''
     void borrarCopiaLocal()
     if (MODO_DEMO) return
     try { await api('/api/auth/logout', { metodo: 'POST' }) } catch { /* la sesión local se cierra igual */ }
