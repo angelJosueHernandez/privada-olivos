@@ -1,4 +1,5 @@
-import { api, hayApi } from '../../shared/api/cliente'
+import { api, apiSinConexion, hayApi } from '../../shared/api/cliente'
+import { cola } from '../../shared/red/cola'
 import { casetaService } from '../caseta/casetaService'
 import { directorioService } from '../directorio/directorioService'
 import type { Actor } from '../caseta/tipos'
@@ -146,7 +147,7 @@ export const comunidadService = {
    * Sin `casa`: todos, para la administración. Con API el servidor filtra según la sesión.
    */
   async anuncios(casa?: string): Promise<Anuncio[]> {
-    if (hayApi) return (await api<Anuncio[]>(casa ? '/api/anuncios' : '/api/admin/anuncios')).map(conRespuestas)
+    if (hayApi) return cola.aplicar('anuncios', (await api<Anuncio[]>(casa ? '/api/anuncios' : '/api/admin/anuncios')).map(conRespuestas), conRespuestas)
     await espera(150)
     const lista: Anuncio[] = casa
       ? demo.anuncios.filter((a) => anuncioVigente(a) && anuncioPara(a, casa)).map((a) => ({ ...a, miRespuesta: demo.respuestas[a.id]?.[casa] }))
@@ -189,7 +190,12 @@ export const comunidadService = {
    */
   async responderAnuncio(id: string, valor: ValorRespuesta, personas: number | undefined, actor: Actor): Promise<Respuesta> {
     const n = valor === 'ASISTE' ? Math.min(MAX_PERSONAS, Math.max(1, Math.round(personas ?? 1))) : undefined
-    if (hayApi) return revivirRespuesta(await api<Respuesta>(`/api/anuncios/${encodeURIComponent(id)}/respuesta`, { metodo: 'PUT', cuerpo: { valor, personas: n } }))
+    if (hayApi) {
+      const local: Respuesta = { casa: actor.casa ?? '', valor, personas: n, por: actor, en: new Date() }
+      return revivirRespuesta(await apiSinConexion<Respuesta>(`/api/anuncios/${encodeURIComponent(id)}/respuesta`, { metodo: 'PUT', cuerpo: { valor, personas: n } }, {
+        descripcion: 'Respuesta a un anuncio', optimista: () => local, parche: { lista: 'anuncios', id, cambios: { miRespuesta: local } },
+      }))
+    }
     await espera(200)
     const casa = actor.casa ?? ''
     const a = demo.anuncios.find((x) => x.id === id)
@@ -219,7 +225,7 @@ export const comunidadService = {
     return cuotasDe(casa)
   },
   async misComprobantes(casa: string): Promise<Comprobante[]> {
-    if (hayApi) return (await api<Comprobante[]>('/api/pagos/comprobantes')).map(revivirComprobante)
+    if (hayApi) return cola.aplicar('mis-comprobantes', (await api<Comprobante[]>('/api/pagos/comprobantes')).map(revivirComprobante), revivirComprobante)
     await espera(150)
     return demo.comprobantes.filter((c) => c.casa === casa).sort((a, b) => b.subidoEn.getTime() - a.subidoEn.getTime())
   },
@@ -229,7 +235,13 @@ export const comunidadService = {
       const form = new FormData()
       form.append('datos', new Blob([JSON.stringify(datos)], { type: 'application/json' }))
       form.append('imagen', imagen, 'comprobante.jpg')
-      return revivirComprobante(await api<Comprobante>('/api/pagos/comprobantes', { metodo: 'POST', cuerpo: form }))
+      // Sin internet se guarda (con la foto) y se envía al reconectar; mientras, se ve "Por enviar"
+      const local: Comprobante = { ...datos, id: crypto.randomUUID(), folio: 'Por enviar', casa: actor.casa ?? '', imagen: await aDataUrl(imagen),
+        estado: 'EN_REVISION', subidoPor: actor, subidoEn: new Date() }
+      return revivirComprobante(await apiSinConexion<Comprobante>('/api/pagos/comprobantes', { metodo: 'POST', cuerpo: form }, {
+        descripcion: `Comprobante de ${pesos(datos.monto)}`, optimista: () => local,
+        local: { lista: 'mis-comprobantes', objeto: local as unknown as { id: string } },
+      }))
     }
     await espera(600)
     const casa = actor.casa ?? ''
@@ -256,12 +268,15 @@ export const comunidadService = {
     })
   },
   async comprobantes(): Promise<Comprobante[]> {
-    if (hayApi) return (await api<Comprobante[]>('/api/admin/comprobantes')).map(revivirComprobante)
+    if (hayApi) return cola.aplicar('comprobantes', (await api<Comprobante[]>('/api/admin/comprobantes')).map(revivirComprobante), revivirComprobante)
     await espera(150)
     return [...demo.comprobantes].sort((a, b) => b.subidoEn.getTime() - a.subidoEn.getTime())
   },
   async revisarComprobante(id: string, decision: { aprobar: true } | { aprobar: false; motivo: string }, actor: Actor): Promise<void> {
-    if (hayApi) return api<void>(`/api/admin/comprobantes/${encodeURIComponent(id)}/revision`, { metodo: 'POST', cuerpo: decision })
+    if (hayApi) return apiSinConexion<void>(`/api/admin/comprobantes/${encodeURIComponent(id)}/revision`, { metodo: 'POST', cuerpo: decision }, {
+      descripcion: decision.aprobar ? 'Aprobación de un pago' : 'Rechazo de un pago', optimista: () => undefined,
+      parche: { lista: 'comprobantes', id, cambios: decision.aprobar ? { estado: 'APROBADO', revisadoPor: actor, revisadoEn: new Date() } : { estado: 'RECHAZADO', motivoRechazo: decision.motivo, revisadoPor: actor, revisadoEn: new Date() } },
+    })
     await espera(300)
     const c = demo.comprobantes.find((x) => x.id === id)
     if (!c || c.estado !== 'EN_REVISION') throw new Error('Este comprobante ya fue revisado.')

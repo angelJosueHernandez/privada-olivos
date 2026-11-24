@@ -1,8 +1,10 @@
-import { api, hayApi } from '../../shared/api/cliente'
+import { api, apiSinConexion, ErrorRed, hayApi } from '../../shared/api/cliente'
+import { cola } from '../../shared/red/cola'
+import { conexion } from '../../shared/red/conexion'
 import { filtrar, validar } from '../../shared/validacion'
 import {
   HORARIOS, type Acceso, type Actor, type Aviso, type LecturaPlaca, type NuevoAcceso, type NuevoPase, type Pase,
-  type PaseResidente, type Validacion,
+  type PaseResidente, type Validacion, type EstadoPase,
 } from './tipos'
 
 /*
@@ -144,6 +146,28 @@ function estadoActual(p: PaseResidente): PaseResidente {
   return p
 }
 
+/** Pase como lo descarga la caseta para validar sin conexión (solo vigentes de hoy y mañana) */
+type PaseVigente = Pase & { codigo: string; estado: EstadoPase; desde?: Date; hasta?: Date; usadoEn?: Date }
+const revivirVigente = (p: PaseVigente) => fechas(p, ['creadoEn', 'desde', 'hasta', 'usadoEn'])
+
+/** Valida un QR sin internet con la última copia de pases vigentes (y lo hecho localmente) */
+async function validarSinConexion(contenido: string): Promise<Validacion> {
+  let lista: PaseVigente[]
+  try { lista = await api<PaseVigente[]>('/api/caseta/pases/vigentes') }
+  catch { return { estado: 'NO_EXISTE', detalle: 'Sin internet y sin copia de pases en este dispositivo. Registra la visita sin código.' } }
+  lista = await cola.aplicar('pases-vigentes', lista.map(revivirVigente), revivirVigente)
+  const codigo = extraerCodigo(contenido)
+  const p = codigo ? lista.find((x) => x.codigo === codigo) : undefined
+  const nota = ' (validado sin internet)'
+  if (!p) return { estado: 'NO_EXISTE', detalle: `No está en la copia de pases de este dispositivo${nota}.` }
+  const ahora = Date.now()
+  if (p.estado === 'USADO') return { estado: 'USADO', pase: p, detalle: `${p.usadoEn ? `Ya se usó a las ${hm(p.usadoEn)}` : 'Ya se usó'}${nota}.` }
+  if (p.estado === 'REVOCADO') return { estado: 'REVOCADO', pase: p, detalle: `El residente canceló este pase${nota}.` }
+  if (p.hasta && ahora > p.hasta.getTime()) return { estado: 'VENCIDO', pase: p, detalle: `Ya venció${nota}.` }
+  if (p.desde && ahora < p.desde.getTime()) return { estado: 'FUERA_DE_HORARIO', pase: p, detalle: `Es válido desde ${hm(p.desde)}${nota}.` }
+  return { estado: 'VALIDO', pase: p, detalle: `Validado sin internet; se confirmará al reconectar.` }
+}
+
 /** Extrae el código del contenido del QR (puede venir solo o dentro de un enlace). */
 export function extraerCodigo(contenido: string): string | null {
   const m = contenido.toUpperCase().match(/OLV-[A-Z0-9]{4}-[A-Z0-9]{2}/)
@@ -175,8 +199,14 @@ export const casetaService = {
   async validarPase(contenidoQr: string): Promise<Validacion> {
     const contenido = contenidoQr.trim().slice(0, 512)
     if (hayApi) {
-      const v = await api<Validacion>('/api/caseta/pases/validar', { metodo: 'POST', cuerpo: { contenido } })
-      return v.pase ? { ...v, pase: fechas(v.pase, ['creadoEn']) } : v
+      try {
+        const v = await api<Validacion>('/api/caseta/pases/validar', { metodo: 'POST', cuerpo: { contenido } })
+        return v.pase ? { ...v, pase: fechas(v.pase, ['creadoEn']) } : v
+      } catch (e) {
+        // Sin internet: se valida contra la copia de pases vigentes que la caseta descargó
+        if (e instanceof ErrorRed) return validarSinConexion(contenido)
+        throw e
+      }
     }
     await espera()
     const codigo = extraerCodigo(contenido)
@@ -191,7 +221,19 @@ export const casetaService = {
   },
 
   async registrarEntradaConPase(pase: Pase, actor: Actor): Promise<Acceso> {
-    if (hayApi) return conActores(await api<Acceso>(`/api/caseta/pases/${encodeURIComponent(pase.id)}/entrada`, { metodo: 'POST' }))
+    if (hayApi) {
+      // El ID se genera aquí: si se registra sin conexión, la salida posterior ya puede referirse a él
+      const id = crypto.randomUUID()
+      const local: Acceso = { id, folio: 'Pendiente', tipo: 'VISITA_QR', nombre: pase.visitante, casa: pase.casa, placas: pase.placas, fotos: [], entrada: new Date(),
+        paseId: pase.id, paseFolio: pase.folio, paseCreadoPor: pase.creadoPor, paseCreadoEn: pase.creadoEn, registradoPor: actor }
+      const r = await apiSinConexion<Acceso>(`/api/caseta/pases/${encodeURIComponent(pase.id)}/entrada`, { metodo: 'POST', cuerpo: { id } }, {
+        descripcion: `Entrada de ${pase.visitante} a ${pase.casa}`, optimista: () => local,
+        local: { lista: 'accesos-hoy', objeto: local as unknown as { id: string } },
+        // Si era de un solo uso, en este dispositivo ya no se acepta otra vez aunque siga sin red
+        parches: pase.tipo === 'UNICO' ? [{ lista: 'pases-vigentes', id: pase.id, cambios: { estado: 'USADO', usadoEn: new Date() } }] : [],
+      })
+      return conActores(r)
+    }
     await espera(300)
     const ahora = new Date()
     if (pase.tipo === 'UNICO') demo.pases = demo.pases.map((p) => (p.id === pase.id ? { ...p, estado: 'USADO', usadoEn: ahora } : p))
@@ -214,8 +256,14 @@ export const casetaService = {
       const form = new FormData()
       form.append('datos', new Blob([JSON.stringify(datos)], { type: 'application/json' }))
       // El nombre del archivo indica qué es (placa, guia, paquete…); la API lo renombra con un UUID al guardarlo
+      const id = crypto.randomUUID()
+      form.set('datos', new Blob([JSON.stringify({ ...datos, id })], { type: 'application/json' }))
       evidencias.forEach((e, i) => form.append('fotos', e.blob, `${e.etiqueta.replace(/[^a-z]/g, '') || 'foto'}-${i + 1}.jpg`))
-      return conActores(await api<Acceso>('/api/caseta/accesos', { metodo: 'POST', cuerpo: form }))
+      const local: Acceso = { id, folio: 'Pendiente', ...datos, fotos: evidencias.map((e) => URL.createObjectURL(e.blob)), entrada: new Date(), registradoPor: actor }
+      return conActores(await apiSinConexion<Acceso>('/api/caseta/accesos', { metodo: 'POST', cuerpo: form }, {
+        descripcion: `Entrada de ${datos.nombre} a ${datos.casa}`, optimista: () => local,
+        local: { lista: 'accesos-hoy', objeto: { ...local, fotos: [] } as unknown as { id: string } },
+      }))
     }
     await espera(600)
     const fotos = evidencias.map((e) => URL.createObjectURL(e.blob))
@@ -228,7 +276,10 @@ export const casetaService = {
   },
 
   async registrarSalida(id: string, actor: Actor): Promise<void> {
-    if (hayApi) return api<void>(`/api/caseta/accesos/${encodeURIComponent(id)}/salida`, { metodo: 'POST' })
+    if (hayApi) return apiSinConexion<void>(`/api/caseta/accesos/${encodeURIComponent(id)}/salida`, { metodo: 'POST' }, {
+      descripcion: 'Registro de salida', optimista: () => undefined,
+      parche: { lista: 'accesos-hoy', id, cambios: { salida: new Date(), salidaPor: actor } },
+    })
     await espera(250)
     const ahora = new Date()
     demo.accesos = demo.accesos.map((a) => (a.id === id ? { ...a, salida: ahora, salidaPor: actor } : a))
@@ -243,6 +294,7 @@ export const casetaService = {
    * y el guardia elige los datos a mano.
    */
   async leerPlaca(foto: Blob): Promise<LecturaPlaca> {
+    if (!conexion.enLinea) throw new IaNoDisponible('Sin internet no se puede leer la placa automáticamente.')
     const ac = new AbortController()
     const t = setTimeout(() => ac.abort(), 25_000)
     try {
@@ -261,6 +313,8 @@ export const casetaService = {
       return (await r.json()) as LecturaPlaca
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') throw new Error('La lectura tardó demasiado. Intenta de nuevo.')
+      // fetch falla con TypeError cuando no hay red: se ofrece escribirla a mano
+      if (e instanceof TypeError) { conexion.marcarSinRed(); throw new IaNoDisponible('Sin internet no se puede leer la placa automáticamente.') }
       throw e
     } finally {
       clearTimeout(t)
@@ -277,7 +331,10 @@ export const casetaService = {
 
   /** Paquete que se quedó en caseta: se marca como entregado al residente */
   async entregarPaquete(id: string, actor: Actor): Promise<void> {
-    if (hayApi) return api<void>(`/api/caseta/accesos/${encodeURIComponent(id)}/entrega`, { metodo: 'POST' })
+    if (hayApi) return apiSinConexion<void>(`/api/caseta/accesos/${encodeURIComponent(id)}/entrega`, { metodo: 'POST' }, {
+      descripcion: 'Entrega de paquete', optimista: () => undefined,
+      parche: { lista: 'accesos-hoy', id, cambios: { entregado: new Date(), entregadoPor: actor } },
+    })
     await espera(250)
     const ahora = new Date()
     demo.accesos = demo.accesos.map((a) => (a.id === id ? { ...a, entregado: ahora, entregadoPor: actor } : a))
@@ -287,7 +344,11 @@ export const casetaService = {
   },
 
   async listarHoy(): Promise<Acceso[]> {
-    if (hayApi) return (await api<Acceso[]>('/api/caseta/accesos/hoy')).map(conActores)
+    if (hayApi) {
+      // De paso se renueva la copia de pases vigentes (para validar QR si se va el internet)
+      void api('/api/caseta/pases/vigentes').catch(() => {})
+      return cola.aplicar('accesos-hoy', (await api<Acceso[]>('/api/caseta/accesos/hoy')).map(conActores), conActores)
+    }
     await espera(200)
     return [...demo.accesos].sort((a, b) => b.entrada.getTime() - a.entrada.getTime())
   },
@@ -330,7 +391,7 @@ export const casetaService = {
 
   /** Pases creados para la casa del usuario (con API: el servidor filtra por la sesión) */
   async misPases(casa: string): Promise<PaseResidente[]> {
-    if (hayApi) return (await api<PaseResidente[]>('/api/pases/mios')).map(revivirPase)
+    if (hayApi) return cola.aplicar('mis-pases', (await api<PaseResidente[]>('/api/pases/mios')).map(revivirPase), revivirPase)
     await espera(150)
     return demo.pases.filter((p) => p.casa === casa).map(estadoActual)
       .sort((a, b) => b.creadoEn.getTime() - a.creadoEn.getTime())
@@ -338,7 +399,10 @@ export const casetaService = {
 
   /** Cancela un pase: el QR deja de servir de inmediato */
   async cancelarPase(id: string, actor: Actor): Promise<void> {
-    if (hayApi) return api<void>(`/api/pases/${encodeURIComponent(id)}/cancelar`, { metodo: 'POST' })
+    if (hayApi) return apiSinConexion<void>(`/api/pases/${encodeURIComponent(id)}/cancelar`, { metodo: 'POST' }, {
+      descripcion: 'Cancelación de un pase', optimista: () => undefined,
+      parche: { lista: 'mis-pases', id, cambios: { estado: 'REVOCADO' } },
+    })
     await espera(250)
     const p = demo.pases.find((x) => x.id === id && x.casa === actor.casa)
     if (!p) throw new Error('No se encontró el pase.')

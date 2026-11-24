@@ -1,4 +1,5 @@
-import { api, ErrorApi, hayApi } from '../../shared/api/cliente'
+import { api, borrarCopiaLocal, ErrorApi, ErrorRed, hayApi, sincronizar } from '../../shared/api/cliente'
+import { cola } from '../../shared/red/cola'
 import { directorioService } from '../directorio/directorioService'
 import type { Cuenta } from '../directorio/tipos'
 import { INACTIVIDAD_MIN } from './permisos'
@@ -97,8 +98,21 @@ export const authService = {
       try {
         const r = await api<{ usuario: unknown; inicio?: string }>('/api/auth/sesion')
         const inicio = r.inicio ? new Date(r.inicio) : new Date()
-        return { usuario: validarUsuario(r.usuario), inicio: isNaN(inicio.getTime()) ? new Date() : inicio }
-      } catch { return null }
+        const s = { usuario: validarUsuario(r.usuario), inicio: isNaN(inicio.getTime()) ? new Date() : inicio }
+        authService.recordar(s.usuario, s.inicio)
+        return s
+      } catch (e) {
+        // Sin internet no se puede preguntar al servidor: se sigue con la sesión de esta pestaña
+        // (sin tokens; al reconectar el servidor la vuelve a validar y responde 401 si ya no vale)
+        if (!(e instanceof ErrorRed)) { borrarSesionDemo(); return null }
+        try {
+          const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? 'null') as { usuario?: unknown; inicio?: number; ultima?: number } | null
+          if (!s || typeof s.inicio !== 'number' || typeof s.ultima !== 'number') return null
+          const usuario = validarUsuario(s.usuario)
+          if (Date.now() - s.ultima > INACTIVIDAD_MIN[usuario.rol] * 60_000) { borrarSesionDemo(); return null }
+          return { usuario, inicio: new Date(s.inicio) }
+        } catch { return null }
+      }
     }
     try {
       const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? 'null') as { id?: unknown; inicio?: unknown; ultima?: unknown } | null
@@ -111,7 +125,14 @@ export const authService = {
   },
   /** Demo: recuerda la sesión en esta pestaña (solo ID y horas) */
   recordar(usuario: Usuario, inicio: Date) {
-    if (!MODO_DEMO) return
+    // La cola de cambios sin conexión es de esta persona; al entrar se envía lo que tenga pendiente
+    cola.usuario = usuario.id
+    void sincronizar()
+    if (!MODO_DEMO) {
+      // Con API: solo para poder seguir sin internet en esta pestaña (nunca tokens; la cookie es HttpOnly)
+      try { sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ usuario, inicio: inicio.getTime(), ultima: Date.now() })) } catch { /* nada */ }
+      return
+    }
     try { sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ id: usuario.id, inicio: inicio.getTime(), ultima: Date.now() })) } catch { /* sin almacenamiento: solo en memoria */ }
     directorioService.registrarAcceso(usuario.id)
   },
@@ -133,7 +154,6 @@ export const authService = {
   },
   /** Demo: anota la última actividad para que la sesión recuperada respete la inactividad */
   marcarActividad() {
-    if (!MODO_DEMO) return
     try {
       const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? 'null')
       if (s) sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ ...s, ultima: Date.now() }))
@@ -168,6 +188,10 @@ export const authService = {
 
   async logout(): Promise<void> {
     borrarSesionDemo()
+    // La copia de datos se borra (no deja datos de esta persona en el dispositivo); los cambios
+    // pendientes se quedan y se envían cuando ella vuelva a entrar con conexión
+    cola.usuario = ''
+    void borrarCopiaLocal()
     if (MODO_DEMO) return
     try { await api('/api/auth/logout', { metodo: 'POST' }) } catch { /* la sesión local se cierra igual */ }
   },

@@ -6,6 +6,7 @@ import Icon from './Icon'
 import Marca from './Marca'
 import { BarraPestanas, PestanasSuperiores, SECCIONES } from './Navegacion'
 import AvisosGlobales from '../avisos/AvisosGlobales'
+import EstadoConexion from '../red/EstadoConexion'
 
 const ETIQUETA = { ADMIN: 'Administración', RESIDENTE: 'Residente', GUARDIA: 'Caseta' }
 
@@ -47,6 +48,7 @@ export default function AppShell() {
             </button>
           </div>
         </div>
+        <EstadoConexion />
       </header>
       <main className={`flex-1 w-full max-w-5xl mx-auto px-5 pt-8 sm:pt-12 ${conPestanas ? 'pb-10' : 'pb-[calc(env(safe-area-inset-bottom)+2.5rem)]'}`}>
         <Outlet />

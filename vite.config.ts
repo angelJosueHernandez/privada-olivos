@@ -10,6 +10,10 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         // Las respuestas de la API (datos de residentes, pagos, sesión) nunca se guardan en caché
         navigateFallbackDenylist: [/^\/api\//],
+        // Todo lo necesario para abrir y usar la app sin internet (código, estilos, iconos, imágenes)
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
+        navigateFallback: 'index.html',
+        cleanupOutdatedCaches: true,
         runtimeCaching: [],
         // Avisos: push del servidor y abrir la app al tocar una notificación
         importScripts: ['sw-avisos.js'],

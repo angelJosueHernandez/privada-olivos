@@ -150,6 +150,23 @@ Revisado contra producción (`privada-olivos.vercel.app`) con las herramientas q
   2. Cuando exista la API, exigir sesión de guardia y límite por usuario con almacenamiento compartido (Redis/KV), no en memoria.
 - **Datos personales en `localStorage` (demo)**: nombres, teléfonos, comprobantes y secretos TOTP de prueba. Aceptable solo para demostración; en producción viven en el servidor y el navegador no guarda nada sensible.
 
+### 7h. Funcionamiento sin internet y sincronización
+
+**Cómo funciona en la app** (`src/shared/red/`):
+- El service worker guarda código, estilos, iconos e imágenes: la app abre sin internet.
+- Barra "Sin internet" bajo el encabezado; al reconectar avisa y dice cuántos cambios se enviaron.
+- **Cola de cambios** (IndexedDB, incluye fotos): entradas, salidas, paquetes entregados, cancelación de pases, comprobantes, respuestas a anuncios y revisión de pagos se guardan si no hay red, se ven de inmediato en pantalla y se envían **en orden** al volver la conexión (evento `online`, al volver a la app y cada 30 s).
+- **Copia de consultas** (IndexedDB): la última respuesta de cada consulta se usa sin red, hasta 7 días, solo para la misma persona; se borra al cerrar sesión.
+- La caseta descarga los **pases vigentes** y valida QR sin red; un pase de un solo uso registrado sin red ya no se acepta otra vez en ese dispositivo.
+- Sin red **no** se puede: crear pases (la caseta debe recibirlo), leer placas con IA (pasa a captura manual), ni acciones del Directorio (contraseñas, suspensiones).
+
+**Lo que la API debe cumplir para que sea seguro:**
+- **`Idempotency-Key`** en todo POST/PUT/PATCH/DELETE: guardar la clave con su respuesta ≥ 48 h y, si llega repetida, devolver la misma respuesta sin repetir el cambio (si la conexión se corta a mitad del envío, la app reintenta con la misma clave).
+- Aceptar el **`id` UUID generado por el cliente** en altas de accesos (para que la salida hecha sin red apunte al registro correcto); rechazar si ya existe con otro dueño.
+- Tratar los cambios atrasados con la **hora del servidor** para auditoría y guardar también la hora del dispositivo como dato informativo; resolver conflictos (p. ej. pago ya revisado por otra persona) con **409**: la app lo quita de la cola y avisa qué no se guardó.
+- `GET /api/caseta/pases/vigentes`: solo GUARDIA, solo pases de hoy y mañana, mínimo de datos. Una entrada validada sin red se vuelve a validar en el servidor al llegar; si el pase ya no era válido, la entrada se registra marcada para revisión.
+- Sesión sin red: la pestaña conserva solo el usuario (sin tokens); al reconectar, el servidor revalida la cookie y un 401 saca a la persona. Los cambios de la cola se envían **solo con la sesión de quien los hizo**.
+
 ### 7c. Notificaciones push
 - Guardar cada suscripción ligada al usuario y la privada de la sesión; borrarla al cerrar sesión o si el servicio
   push responde 404/410.

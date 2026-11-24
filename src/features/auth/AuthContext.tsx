@@ -1,6 +1,8 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { directorioService } from '../directorio/directorioService'
+import { sincronizar } from '../../shared/api/cliente'
+import { cola } from '../../shared/red/cola'
 import { authService, Usuario } from './authService'
 export { rutaInicio } from './permisos'
 
@@ -44,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let vivo = true
     authService.restaurar().then((r) => {
       if (!vivo) return
-      if (r) { setUser(congelar(r.usuario)); setInicioSesion(r.inicio) }
+      if (r) { setUser(congelar(r.usuario)); setInicioSesion(r.inicio); cola.usuario = r.usuario.id; void sincronizar() }
       setListo(true)
     })
     return () => { vivo = false }
